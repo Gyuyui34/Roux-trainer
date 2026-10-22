@@ -35,6 +35,7 @@ for (const drill of ['fb', 'sb', 'cmll', 'eo']) {
       if (drill === 'eo') ok = _internal.eoDone(after);
       check(ok === (idx === p.answer), `${drill} choice ${idx} ok=${ok} answer=${p.answer} ${ch.label}`);
     });
+    if (drill === 'cmll') check(p.colors[4] === 0 && p.colors[22] === 2, 'cmll centers aligned');
     if (drill !== 'fb') check(C.isSolvedAt(p.colors, drill === 'sb' ? C.FB_STICKERS : C.F2B_STICKERS), `${drill} precondition`);
   }
   console.log(drill, 'ok', `${((Date.now() - t0) / 40).toFixed(1)}ms/問`);

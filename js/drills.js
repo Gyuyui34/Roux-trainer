@@ -213,6 +213,9 @@ function genCmll(opts) {
   else target = pick(pool);
   const lse = C.randomMoves(LSE_MOVES, 16);
   const setup = [...lse, ...target.inv, ...parse(pick(AUFS))];
+  // M 列を回してセンターを揃える(コーナーには影響しない)
+  const fix = ['M', 'M2', "M'"].find((m) => C.applyAlg(C.solved(), [...setup, m])[4] === 0);
+  if (C.applyAlg(C.solved(), setup)[4] !== 0) setup.push(fix);
   const colors = C.applyAlg(C.solved(), setup);
   let others = pool.filter((c) => c !== target);
   // 同じセットの別ケースを優先して紛らわしくする
