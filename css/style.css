@@ -155,7 +155,7 @@ details.scr summary { cursor: pointer; }
 .heat i.goal { box-shadow: inset 0 0 0 2px #ff6b3d; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 td, th { padding: 7px 4px; border-bottom: 1px solid var(--line); text-align: left; }
-th { color: var(--sub); font-weight: 600; }
+th { color: var(--sub); font-weight: 600; white-space: nowrap; }
 td.r, th.r { text-align: right; }
 .acc-bar { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; width: 60px; display: inline-block; vertical-align: middle; }
 .acc-bar i { display: block; height: 100%; }
@@ -206,3 +206,6 @@ textarea.algin { width: 100%; margin-top: 12px; background: var(--panel2); color
 #eosubmit { width: auto; margin: 0; padding: 12px 22px; flex-shrink: 0; }
 .scene.compact { max-height: 31vh; }
 body.quiz-mode .prompt { margin: 2px 0 8px; }
+
+.opt { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.opt + .sub { margin-top: -6px !important; }

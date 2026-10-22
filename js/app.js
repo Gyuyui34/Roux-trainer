@@ -14,10 +14,13 @@ let selectedDay = S.dayKey();
 let chartKey = null;
 
 // 出題モード → 記録のキー(AUF なし / AUF ランダムで記録を分ける)
+// 片手の手順で練習した記録は末尾に Oh を付けたキーで別に保存する
 const drillOf = (cfg) => {
-  if (cfg.kind === 'eo') return cfg.auf === 'random' ? 'cmllEoAuf' : 'cmllEo';
-  return cfg.auf === 'random' ? 'cmllAuf' : 'cmll';
+  const base = cfg.kind === 'eo' ? (cfg.auf === 'random' ? 'cmllEoAuf' : 'cmllEo') : (cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
+  return S.get().settings.algSlot === 'oh' ? `${base}Oh` : base;
 };
+const baseDrill = (k) => k.replace(/Oh$/, '');
+const drillName = (k) => `${DRILLS[baseDrill(k)].name}・${k.endsWith('Oh') ? '片手' : '両手'}`;
 const KIND_LABEL = { alg: '手順を当てる', eo: 'CMLL後のEO' };
 const AUF_LABEL = { none: 'AUFなし', random: 'AUFランダム' };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -146,15 +149,18 @@ function renderHome() {
         <div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, pct(todayN, goal))}%"></i></div></div>
       </div>
     </div>
-    <h2>CMLL のセット</h2>
+    <h2>練習の設定</h2>
     <div class="card">
-      <div class="row between" style="margin-bottom:12px"><span>問題の種類</span>
+      <div class="opt"><span class="sub">問題の種類</span>
         <div class="chips" id="kind">${Object.entries(KIND_LABEL).map(([k, v]) => `<button class="chip ${cfg.kind === k ? 'on' : ''}" data-kind="${k}">${v}</button>`).join('')}</div></div>
-      <div class="row between" style="margin-bottom:12px"><span>出題モード</span>
+      <div class="opt"><span class="sub">手順</span>
+        <div class="chips" id="slothome">${Object.entries(SLOT_NAMES).map(([k, v]) => `<button class="chip ${d.settings.algSlot === k ? 'on' : ''}" data-slot="${k}">${v}</button>`).join('')}</div></div>
+      <div class="opt"><span class="sub">出題モード</span>
         <div class="chips" id="aufmode">${Object.entries(AUF_LABEL).map(([k, v]) => `<button class="chip ${cfg.auf === k ? 'on' : ''}" data-auf="${k}">${v}</button>`).join('')}</div></div>
       <div class="sub" style="margin:-4px 0 12px">${cfg.kind === 'eo'
         ? (cfg.auf === 'random' ? '向きがランダムに変わります。手順の前のAUFを選び、手順表の手順を回した後に向きが揃っていないLSEのエッジをすべて選びます。' : '手順表の手順を回した後、向きが揃っていないLSEのエッジをすべて選びます。')
         : (cfg.auf === 'random' ? '向きがランダムに変わります。手順の前のAUFも選んで答えます。' : '手順表の手順をそのままかけられる向きで出題します。')}</div>
+      <div class="opt" style="margin-bottom:0"><span class="sub">CMLL のセット</span></div>
       <div class="chips" id="sets">${CMLL_SETS.map((s) => `<button class="chip ${cfg.sets.includes(s) ? 'on' : ''}" data-set="${s}">${s}</button>`).join('')}</div>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>
     </div>
@@ -178,6 +184,7 @@ function renderHome() {
   };
   const aufEl = app.querySelector('#aufmode');
   if (aufEl) aufEl.onclick = (e) => { const b = e.target.closest('[data-auf]'); if (b) update({ auf: b.dataset.auf }); };
+  app.querySelector('#slothome').onclick = (e) => { const b = e.target.closest('[data-slot]'); if (b) { S.updateSettings({ algSlot: b.dataset.slot }); renderHome(); } };
   app.querySelector('#kind').onclick = (e) => { const b = e.target.closest('[data-kind]'); if (b) update({ kind: b.dataset.kind }); };
   app.querySelector('#weak').onchange = (e) => update({ weak: e.target.checked });
   app.querySelector('#testn').onclick = (e) => { const b = e.target.closest('[data-n]'); if (b) update({ testN: Number(b.dataset.n) }); };
@@ -189,7 +196,8 @@ function renderHome() {
 // ---------------- クイズ ----------------
 // 出題に使う手順(設定で選んだ枠。自分の手順がなければ初期手順)
 const SLOT_NAMES = { two: '両手', oh: '片手' };
-const algOf = (c) => S.customAlg(c.name, S.get().settings.algSlot) || c.alg;
+const algFor = (c, slot) => S.customAlg(c.name, slot) || c.alg;
+const algOf = (c) => algFor(c, S.get().settings.algSlot);
 
 function genOpts(cfg) {
   return { sets: cfg.sets, stats: cfg.weak ? (S.get().caseStats[drillOf(cfg)] || {}) : null, algOf };
@@ -202,7 +210,7 @@ function startQuiz(mode) {
     const pool = CMLL_CASES.filter((c) => cfg.sets.includes(c.set));
     const seq = [];
     while (seq.length < cfg.testN) seq.push(...[...pool].sort(() => Math.random() - 0.5));
-    quiz.problems = seq.slice(0, cfg.testN).map((c) => generate(quiz.drill, { sets: cfg.sets, forceCase: c.name, algOf }));
+    quiz.problems = seq.slice(0, cfg.testN).map((c) => ({ ...generate(baseDrill(quiz.drill), { sets: cfg.sets, forceCase: c.name, algOf }), drill: quiz.drill }));
     quiz.total = cfg.testN;
     quiz.cfgKey = cfg.sets.length === CMLL_SETS.length ? 'all' : cfg.sets.join(',');
   }
@@ -228,7 +236,7 @@ function buildQuizView() {
   app.innerHTML = `
     <div class="quiz-top">
       <button class="x" id="quit">✕</button>
-      <div style="text-align:center;flex:1"><div style="font-weight:800">${title} ・ ${quiz.mode === 'review' ? 'CMLL' : DRILLS[quiz.drill].name}</div><div class="sub" id="qcount"></div></div>
+      <div style="text-align:center;flex:1"><div style="font-weight:800">${title} ・ ${quiz.mode === 'review' ? 'CMLL' : drillName(quiz.drill)}</div><div class="sub" id="qcount"></div></div>
       ${quiz.mode === 'test' ? '<div class="timer" id="timer">0.00</div>' : '<div class="combo" id="combo"></div>'}
     </div>
     ${quiz.total ? '<div class="progress"><i id="qprog" style="width:0"></i></div>' : ''}
@@ -313,7 +321,7 @@ function tickTimer() {
 function nextProblem() {
   if (!quiz) return;
   if (quiz.total && quiz.idx >= quiz.total) { finishQuiz(); return; }
-  const p = quiz.problems ? quiz.problems[quiz.idx] : generate(quiz.drill, genOpts(quiz.cfg));
+  const p = quiz.problems ? quiz.problems[quiz.idx] : { ...generate(baseDrill(quiz.drill), genOpts(quiz.cfg)), drill: quiz.drill };
   quiz.current = p;
   quiz.answered = false;
   quiz.selAlg = null;
@@ -573,9 +581,9 @@ function histCalendar(body) {
       <div><div class="sub">正答率</div><div class="big" style="color:${accColor(pct(st.c, st.n))}">${pct(st.c, st.n)}%</div></div>
       <div><div class="sub">獲得XP</div><div class="big">${sel.xp || 0}</div></div></div>
       <table><tr><th>項目</th><th class="r">練習</th><th class="r">正答率</th><th class="r">テスト</th><th class="r">正答率</th></tr>
-      ${Object.entries(sel.practice).map(([dr, p]) => `<tr><td>${DRILLS[dr].name}</td><td class="r">${p.n}問</td><td class="r">${p.n ? pct(p.correct, p.n) + '%' : '-'}</td><td class="r">${p.testN}問</td><td class="r">${p.testN ? pct(p.testCorrect, p.testN) + '%' : '-'}</td></tr>`).join('')}
+      ${Object.entries(sel.practice).map(([dr, p]) => `<tr><td>${drillName(dr)}</td><td class="r">${p.n}問</td><td class="r">${p.n ? pct(p.correct, p.n) + '%' : '-'}</td><td class="r">${p.testN}問</td><td class="r">${p.testN ? pct(p.testCorrect, p.testN) + '%' : '-'}</td></tr>`).join('')}
       </table>
-      ${sel.tests.length ? `<h2>この日のテスト</h2><table>${sel.tests.map((t) => `<tr><td>${DRILLS[t.drill].name} ${t.n}問 <span class="sub">${t.cfg === 'all' ? '全セット' : esc(t.cfg)}</span></td><td class="r mono">${fmtTime(t.timeMs)}</td><td class="r">${pct(t.correct, t.n)}%</td></tr>`).join('')}</table>` : ''}`;
+      ${sel.tests.length ? `<h2>この日のテスト</h2><table>${sel.tests.map((t) => `<tr><td>${drillName(t.drill)} ${t.n}問 <span class="sub">${t.cfg === 'all' ? '全セット' : esc(t.cfg)}</span></td><td class="r mono">${fmtTime(t.timeMs)}</td><td class="r">${pct(t.correct, t.n)}%</td></tr>`).join('')}</table>` : ''}`;
   }
   body.innerHTML = `
     <div class="card"><div class="row between sub" style="margin-bottom:8px"><span>直近${weeks}週間</span><span>枠つき=ノルマ達成</span></div><div class="heat" id="heat">${cells}</div></div>
@@ -593,7 +601,7 @@ function histTests(body) {
   if (!tests.length) { body.innerHTML = '<div class="empty">まだテストの記録がありません。<br>ホームの「テスト」から挑戦できます。</div>'; return; }
   const keys = [...new Set(tests.map((t) => t.key))];
   if (!chartKey || !keys.includes(chartKey)) chartKey = tests[tests.length - 1].key;
-  const label = (k) => { const [dr, cfg, n] = k.split('|'); return `${DRILLS[dr].name} ${n}問 ${cfg === 'all' ? '全セット' : cfg}`; };
+  const label = (k) => { const [dr, cfg, n] = k.split('|'); return `${drillName(dr)} ${n}問 ${cfg === 'all' ? '全セット' : cfg}`; };
   const list = tests.filter((t) => t.key === chartKey);
   const best = S.bestTest(chartKey);
   body.innerHTML = `
@@ -625,21 +633,25 @@ function chartSvg(list) {
 }
 
 let caseMode = 'cmll';
+let caseSlot = null;
 function histCases(body) {
-  const stats = S.get().caseStats[caseMode] || {};
+  caseSlot ||= S.get().settings.algSlot;
+  const stats = S.get().caseStats[caseSlot === 'oh' ? `${caseMode}Oh` : caseMode] || {};
   const rows = CMLL_CASES.map((c) => ({ c, s: stats[c.name] || { n: 0, correct: 0 } }));
   const seen = rows.filter((r) => r.s.n).sort((a, b) => a.s.correct / a.s.n - b.s.correct / b.s.n || b.s.n - a.s.n);
   const unseen = rows.filter((r) => !r.s.n);
   const mastered = rows.filter((r) => r.s.correct > 0).length;
   body.innerHTML = `
+    <div class="chips" id="cslot" style="margin-bottom:8px">${Object.entries(SLOT_NAMES).map(([k, v]) => `<button class="chip ${caseSlot === k ? 'on' : ''}" data-s="${k}">${v}</button>`).join('')}</div>
     <div class="chips" id="cmode" style="margin-bottom:12px">${[['cmll', '手順・AUFなし'], ['cmllAuf', '手順・AUFランダム'], ['cmllEo', 'EO・AUFなし'], ['cmllEoAuf', 'EO・AUFランダム']].map(([k, v]) => `<button class="chip ${caseMode === k ? 'on' : ''}" data-m="${k}">${v}</button>`).join('')}</div>
     <div class="card row between"><div><div class="sub">正解したことのあるケース</div><div class="big">${mastered}<span style="font-size:14px"> / 42</span></div></div>
       <div class="bar" style="width:120px"><i style="width:${pct(mastered, 42)}%"></i></div></div>
     <div class="card"><div class="sub" style="margin-bottom:6px">正答率の低い順(苦手ケースが上)</div>
     <table><tr><th>セット</th><th>手順</th><th class="r">回数</th><th class="r">正答率</th></tr>
-    ${seen.map(({ c, s }) => { const p = pct(s.correct, s.n); return `<tr><td>${c.set}</td><td class="mono" style="font-size:11px">${esc(algOf(c))}</td><td class="r">${s.n}</td><td class="r"><span class="acc-bar"><i style="width:${p}%;background:${accColor(p)}"></i></span> ${p}%</td></tr>`; }).join('')}
-    ${unseen.map(({ c }) => `<tr style="opacity:.45"><td>${c.set}</td><td class="mono" style="font-size:11px">${esc(algOf(c))}</td><td class="r">0</td><td class="r">未出題</td></tr>`).join('')}
+    ${seen.map(({ c, s }) => { const p = pct(s.correct, s.n); return `<tr><td>${c.set}</td><td class="mono" style="font-size:11px">${esc(algFor(c, caseSlot))}</td><td class="r">${s.n}</td><td class="r"><span class="acc-bar"><i style="width:${p}%;background:${accColor(p)}"></i></span> ${p}%</td></tr>`; }).join('')}
+    ${unseen.map(({ c }) => `<tr style="opacity:.45"><td>${c.set}</td><td class="mono" style="font-size:11px">${esc(algFor(c, caseSlot))}</td><td class="r">0</td><td class="r">未出題</td></tr>`).join('')}
     </table></div>`;
+  body.querySelector('#cslot').onclick = (e) => { const b = e.target.closest('[data-s]'); if (b) { caseSlot = b.dataset.s; renderHistory(); } };
   body.querySelector('#cmode').onclick = (e) => { const b = e.target.closest('[data-m]'); if (b) { caseMode = b.dataset.m; renderHistory(); } };
 }
 
@@ -648,7 +660,7 @@ function histReview(body) {
   if (!ms.length) { body.innerHTML = '<div class="empty">間違えた問題はありません 🎉</div>'; return; }
   body.innerHTML = `
     <button class="btn primary" id="rev">まとめて復習(最大20問)<small>正解すると一覧から消えます</small></button>
-    <div class="card">${ms.slice(0, 100).map((m) => `<div class="mistake"><div><b>${DRILLS[m.drill].name}</b> <span class="mono" style="font-size:12px">${esc(m.problem.explain)}</span></div>
+    <div class="card">${ms.slice(0, 100).map((m) => `<div class="mistake"><div><b>${drillName(m.drill)}</b> <span class="mono" style="font-size:12px">${esc(m.problem.explain)}</span></div>
       <span class="sub">${new Date(m.at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}</span></div>`).join('')}</div>`;
   body.querySelector('#rev').onclick = () => startQuiz('review');
 }
