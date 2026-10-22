@@ -14,6 +14,7 @@ function emptyData() {
     streak: { current: 0, best: 0, lastGoalDay: null },
     stamps: 0,
     caseStats: {},
+    caseTimes: {},
     mistakes: [],
     tests: [],
     badges: {},
@@ -102,7 +103,7 @@ export function openToday() {
 // ---------- 解答の記録 ----------
 const COMBO_CAP = 10;
 
-export function recordAnswer({ drill, caseKey, ok, mode, combo, problem }) {
+export function recordAnswer({ drill, caseKey, ok, mode, combo, problem, timeMs }) {
   const events = [];
   const d = today();
   const p = (d.practice[drill] ||= { n: 0, correct: 0, testN: 0, testCorrect: 0 });
@@ -110,6 +111,13 @@ export function recordAnswer({ drill, caseKey, ok, mode, combo, problem }) {
   const cs = ((data.caseStats[drill] ||= {})[caseKey] ||= { n: 0, correct: 0 });
   cs.n++;
   if (ok) cs.correct++;
+  // ケースごとの解答タイム [日時, ミリ秒, 正解なら1, テストなら1]。各ケース直近100件
+  if (timeMs > 0 && mode !== 'review') {
+    data.caseTimes ||= {};
+    const arr = ((data.caseTimes[drill] ||= {})[caseKey] ||= []);
+    arr.push([Date.now(), Math.round(timeMs), ok ? 1 : 0, mode === 'test' ? 1 : 0]);
+    if (arr.length > 100) arr.splice(0, arr.length - 100);
+  }
 
   let gained = 0;
   if (ok) gained = 10 + Math.min(combo, COMBO_CAP) * 2;

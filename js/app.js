@@ -11,7 +11,6 @@ let tab = 'home';
 let quiz = null;
 let historyTab = 'calendar';
 let selectedDay = S.dayKey();
-let chartKey = null;
 
 // 出題モード → 記録のキー(AUF なし / AUF ランダムで記録を分ける)
 // 片手の手順で練習した記録は末尾に Oh を付けたキーで別に保存する
@@ -358,6 +357,7 @@ function nextProblem() {
   const prog = app.querySelector('#qprog');
   if (prog) prog.style.width = `${pct(quiz.idx, quiz.total)}%`;
   updateCombo(false);
+  quiz.shownT = performance.now();
 }
 
 function updateCombo(pop) {
@@ -403,8 +403,9 @@ function settle(ok, rect, wrongMsg) {
 
   const stored = { ...p, colors: p.colors.join('') };
   const { gained, events } = S.recordAnswer({
-    drill: p.drill || quiz.drill, caseKey: p.caseKey, ok, mode: quiz.mode === 'test' ? 'test' : 'practice', combo: quiz.combo,
+    drill: p.drill || quiz.drill, caseKey: p.caseKey, ok, mode: quiz.mode === 'test' ? 'test' : quiz.mode === 'review' ? 'review' : 'practice', combo: quiz.combo,
     problem: ok || quiz.mode === 'review' ? null : stored,
+    timeMs: quiz.mode === 'review' ? 0 : performance.now() - quiz.shownT,
   });
   quiz.xp += gained;
   if (quiz.mode === 'review' && ok) S.removeMistake(quiz.mistakesIds[quiz.idx]);
@@ -593,7 +594,7 @@ function endQuiz() {
 
 // ---------------- 記録 ----------------
 function renderHistory() {
-  const tabs = { calendar: '日別', tests: 'テスト', cases: 'ケース別', review: '復習', badges: 'バッジ' };
+  const tabs = { calendar: '日別', tests: 'タイム', cases: 'ケース別', review: '復習', badges: 'バッジ' };
   app.innerHTML = `<h1>記録</h1><div class="seg">${Object.entries(tabs).map(([k, v]) => `<button data-h="${k}" class="${historyTab === k ? 'on' : ''}">${v}</button>`).join('')}</div><div id="hbody"></div>`;
   app.querySelector('.seg').onclick = (e) => { const b = e.target.closest('[data-h]'); if (b) { historyTab = b.dataset.h; renderHistory(); } };
   const body = app.querySelector('#hbody');
@@ -647,42 +648,58 @@ function histCalendar(body) {
   body.querySelector('#heat').onclick = (e) => { const c = e.target.closest('[data-d]'); if (c) { selectedDay = c.dataset.d; renderHistory(); } };
 }
 
+let timeSrc = 'test';
+// ケースごとの解答タイムの推移(1ケース1グラフ)
 function histTests(body) {
-  const tests = S.get().tests;
-  if (!tests.length) { body.innerHTML = '<div class="empty">まだテストの記録がありません。<br>ホームの「テスト」から挑戦できます。</div>'; return; }
-  const keys = [...new Set(tests.map((t) => t.key))];
-  if (!chartKey || !keys.includes(chartKey)) chartKey = tests[tests.length - 1].key;
-  const label = (k) => { const [dr, cfg, n] = k.split('|'); return `${drillName(dr)} ${n}問 ${cfgLabel(cfg)}`; };
-  const list = tests.filter((t) => t.key === chartKey);
-  const best = S.bestTest(chartKey);
+  caseSlot ||= S.get().settings.algSlot;
+  const drill = caseSlot === 'oh' ? `${caseMode}Oh` : caseMode;
+  const times = (S.get().caseTimes || {})[drill] || {};
+  const rows = CMLL_CASES.map((c) => {
+    const all = (times[c.name] || []).filter((t) => timeSrc === 'all' || t[3]);
+    const okT = all.filter((t) => t[2]).map((t) => t[1]);
+    const recent = okT.slice(-5);
+    return { c, all, avg: recent.length ? recent.reduce((a, v) => a + v, 0) / recent.length : null, best: okT.length ? Math.min(...okT) : null };
+  });
+  const seen = rows.filter((r) => r.all.length).sort((a, b) => (b.avg ?? Infinity) - (a.avg ?? Infinity));
+  const unseen = rows.length - seen.length;
+  const sec = (ms) => (ms == null ? '-' : `${(ms / 1000).toFixed(2)}秒`);
   body.innerHTML = `
-    <select id="tkey" style="width:100%;margin-bottom:12px">${keys.map((k) => `<option value="${esc(k)}" ${k === chartKey ? 'selected' : ''}>${esc(label(k))}</option>`).join('')}</select>
-    <div class="card"><div class="row between"><div><div class="sub">自己ベスト(正答率90%以上)</div><div class="big">${best ? fmtTime(best.timeMs) : '-'}</div></div>
-      <div style="text-align:right"><div class="sub">挑戦回数</div><div class="big">${list.length}</div></div></div>
-      ${chartSvg(list)}<div class="sub">線=タイム、点の色=正答率(緑90%以上/黄70%以上/赤)</div></div>
-    <div class="card"><table><tr><th>日時</th><th class="r">タイム</th><th class="r">正答率</th></tr>
-      ${list.slice().reverse().slice(0, 50).map((t) => `<tr><td>${new Date(t.at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${best && t.at === best.at ? ' 🏆' : ''}</td><td class="r mono">${fmtTime(t.timeMs)}</td><td class="r" style="color:${accColor(pct(t.correct, t.n))}">${pct(t.correct, t.n)}%</td></tr>`).join('')}</table></div>`;
-  body.querySelector('#tkey').onchange = (e) => { chartKey = e.target.value; renderHistory(); };
+    <div class="chips" id="cslot" style="margin-bottom:8px">${Object.entries(SLOT_NAMES).map(([k, v]) => `<button class="chip ${caseSlot === k ? 'on' : ''}" data-s="${k}">${v}</button>`).join('')}</div>
+    <div class="chips" id="cmode" style="margin-bottom:8px">${CASE_MODES.map(([k, v]) => `<button class="chip ${caseMode === k ? 'on' : ''}" data-m="${k}">${v}</button>`).join('')}</div>
+    <div class="chips" id="tsrc" style="margin-bottom:12px">${[['test', 'テストのみ'], ['all', '練習も含む']].map(([k, v]) => `<button class="chip ${timeSrc === k ? 'on' : ''}" data-t="${k}">${v}</button>`).join('')}</div>
+    <div class="sub" style="margin-bottom:8px">1問ごとの解答タイム(問題が出てから答えるまで)。緑=正解、赤=不正解。平均は直近5回の正解から。遅いケースが上。</div>
+    ${seen.length ? seen.map(({ c, all, avg, best }) => `<div class="card tcase">
+      <div class="row between"><div class="row" style="gap:10px">${caseDiagram(c)}<div><b>${c.set}</b> <span class="sub">${all.length}回</span><div class="mono" style="font-size:11px">${esc(algFor(c, caseSlot))}</div></div></div>
+      <div style="text-align:right"><div class="sub">平均</div><div class="mono"><b>${sec(avg)}</b></div><div class="sub">ベスト ${sec(best)}</div></div></div>
+      ${caseChart(all)}</div>`).join('') : '<div class="empty">まだ記録がありません。<br>問題に答えるとケースごとのタイムが記録されます。</div>'}
+    ${seen.length && unseen ? `<div class="sub" style="text-align:center">記録のないケース ${unseen}個</div>` : ''}`;
+  body.querySelector('#cslot').onclick = (e) => { const b = e.target.closest('[data-s]'); if (b) { caseSlot = b.dataset.s; renderHistory(); } };
+  body.querySelector('#cmode').onclick = (e) => { const b = e.target.closest('[data-m]'); if (b) { caseMode = b.dataset.m; renderHistory(); } };
+  body.querySelector('#tsrc').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) { timeSrc = b.dataset.t; renderHistory(); } };
 }
 
-function chartSvg(list) {
-  if (list.length < 2) return '<div class="sub" style="padding:12px 0">2回以上挑戦するとグラフが表示されます</div>';
-  const W = 320, H = 150, P = 24;
-  const pts = list.slice(-30);
-  const times = pts.map((t) => t.timeMs / 1000);
-  const max = Math.max(...times), min = Math.min(...times);
+function caseChart(all) {
+  const pts = all.slice(-30);
+  if (pts.length < 2) return '<div class="sub" style="padding:6px 0">2回以上解くとグラフが表示されます</div>';
+  const W = 320, H = 110, L = 34, R = 8, T = 10, B = 16;
+  const v = pts.map((t) => t[1] / 1000);
+  const max = Math.max(...v), min = Math.min(...v);
   const span = max - min || 1;
-  const x = (i) => P + (i * (W - P * 2)) / (pts.length - 1);
-  const y = (v) => H - P - ((v - min) / span) * (H - P * 2);
-  const path = times.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}">
-    <text x="2" y="${y(max) + 4}" fill="#9aa3b5" font-size="10">${max.toFixed(1)}s</text>
-    <text x="2" y="${y(min) + 4}" fill="#9aa3b5" font-size="10">${min.toFixed(1)}s</text>
-    <path d="${path}" fill="none" stroke="#4c8dff" stroke-width="2.5" stroke-linejoin="round"/>
-    ${pts.map((t, i) => `<circle cx="${x(i)}" cy="${y(times[i])}" r="4" fill="${accColor(pct(t.correct, t.n))}"/>`).join('')}
+  const x = (i) => L + (i * (W - L - R)) / (pts.length - 1);
+  const y = (s) => H - B - ((s - min) / span) * (H - T - B);
+  const path = v.map((s, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(s).toFixed(1)}`).join(' ');
+  const day = (t) => { const d = new Date(t[0]); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  return `<svg class="chart small" viewBox="0 0 ${W} ${H}">
+    <text x="${L - 4}" y="${y(max) + 4}" fill="#9aa3b5" font-size="10" text-anchor="end">${max.toFixed(1)}s</text>
+    <text x="${L - 4}" y="${y(min) + 4}" fill="#9aa3b5" font-size="10" text-anchor="end">${min.toFixed(1)}s</text>
+    <text x="${L}" y="${H - 2}" fill="#9aa3b5" font-size="10">${day(pts[0])}</text>
+    <text x="${W - R}" y="${H - 2}" fill="#9aa3b5" font-size="10" text-anchor="end">${day(pts[pts.length - 1])}</text>
+    <path d="${path}" fill="none" stroke="#4c8dff" stroke-width="2" stroke-linejoin="round"/>
+    ${pts.map((t, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v[i]).toFixed(1)}" r="3.5" fill="${t[2] ? '#2ecc71' : '#ff5a5a'}"/>`).join('')}
   </svg>`;
 }
 
+const CASE_MODES = [['cmll', '手順・AUFなし'], ['cmllAuf', '手順・AUFランダム'], ['cmllEo', 'EO・AUFなし'], ['cmllEoAuf', 'EO・AUFランダム']];
 let caseMode = 'cmll';
 let caseSlot = null;
 function histCases(body) {
@@ -694,7 +711,7 @@ function histCases(body) {
   const mastered = rows.filter((r) => r.s.correct > 0).length;
   body.innerHTML = `
     <div class="chips" id="cslot" style="margin-bottom:8px">${Object.entries(SLOT_NAMES).map(([k, v]) => `<button class="chip ${caseSlot === k ? 'on' : ''}" data-s="${k}">${v}</button>`).join('')}</div>
-    <div class="chips" id="cmode" style="margin-bottom:12px">${[['cmll', '手順・AUFなし'], ['cmllAuf', '手順・AUFランダム'], ['cmllEo', 'EO・AUFなし'], ['cmllEoAuf', 'EO・AUFランダム']].map(([k, v]) => `<button class="chip ${caseMode === k ? 'on' : ''}" data-m="${k}">${v}</button>`).join('')}</div>
+    <div class="chips" id="cmode" style="margin-bottom:12px">${CASE_MODES.map(([k, v]) => `<button class="chip ${caseMode === k ? 'on' : ''}" data-m="${k}">${v}</button>`).join('')}</div>
     <div class="card row between"><div><div class="sub">正解したことのあるケース</div><div class="big">${mastered}<span style="font-size:14px"> / 42</span></div></div>
       <div class="bar" style="width:120px"><i style="width:${pct(mastered, 42)}%"></i></div></div>
     <div class="card"><div class="sub" style="margin-bottom:6px">正答率の低い順(苦手ケースが上)</div>
