@@ -339,19 +339,28 @@ export function badEdges(colors) {
   });
 }
 
+// AUF 固定: 手順をそのまま回す。AUF ランダム: 正解の AUF(対称なケースでは複数)ごとに回した後の EO を求める
 function genCmllEo(opts) {
-  const p = genCmll({ ...opts, auf: 'none' });
+  const p = genCmll(opts);
   const alg = p.choices[p.answer].label;
-  const after = C.applyAlg(p.colors, alg);
-  const bad = badEdges(after);
+  const aufs = opts.auf === 'random' ? p.aufAnswers : [''];
+  const eoAnswers = aufs.map((a) => {
+    const after = C.applyAlg(C.applyAlg(p.colors, parse(a)), alg);
+    return { auf: a, bad: badEdges(after), after: after.join('') };
+  });
+  const fmt = (bad) => (bad.length ? bad.join(' ') : 'なし(全部揃う)');
+  const detail = opts.auf === 'random'
+    ? eoAnswers.map((e) => `${e.auf || 'AUFなし'}: ${fmt(e.bad)}`).join(' / ')
+    : fmt(eoAnswers[0].bad);
   return {
     ...p,
-    drill: 'cmllEo',
-    prompt: 'CMLLを回した後、向きが揃っていないエッジをすべて選んでください',
+    drill: opts.auf === 'random' ? 'cmllEoAuf' : 'cmllEo',
+    prompt: opts.auf === 'random'
+      ? 'AUFと、CMLL後に向きが揃わないエッジを選択'
+      : 'CMLL後に向きが揃わないエッジをすべて選択',
     alg,
-    eoBad: bad,
-    after,
-    explain: `${p.explain} → 揃っていないエッジ: ${bad.length ? bad.join(' ') : 'なし(全部揃う)'}`,
+    eoAnswers,
+    explain: `${p.explain} → 揃っていないエッジ: ${detail}`,
   };
 }
 
@@ -361,7 +370,8 @@ export const DRILLS = {
   fb: { name: 'FB', full: 'ファーストブロック', gen: (o) => genBlock('fb', o), view: [-28, 38], ranges: [[1, 5], [6, 6], [7, 7], [8, 20]] },
   sb: { name: 'SB', full: 'セカンドブロック', gen: (o) => genBlock('sb', o), view: [-28, -35], ranges: [[1, 8], [9, 10], [11, 20]] },
   cmll: { name: 'CMLL', full: 'CMLL(AUFなし)', gen: genCmll, view: [-35, -30] },
-  cmllEo: { name: 'CMLL→EO', full: 'CMLL後のEO', gen: genCmllEo, view: [-35, -30] },
+  cmllEo: { name: 'CMLL→EO', full: 'CMLL後のEO', gen: (o) => genCmllEo({ ...o, auf: 'none' }), view: [-35, -30] },
+  cmllEoAuf: { name: 'CMLL→EO+AUF', full: 'CMLL後のEO(AUFランダム)', gen: (o) => genCmllEo({ ...o, auf: 'random' }), view: [-35, -30] },
   cmllAuf: { name: 'CMLL+AUF', full: 'CMLL(AUFランダム)', gen: (o) => genCmll({ ...o, auf: 'random' }), view: [-35, -30] },
   eo: { name: 'EO', full: 'LSE EO', gen: genEo, view: [-40, -20], ranges: [[1, 4], [5, 6], [7, 20]] },
 };

@@ -61,11 +61,17 @@ console.log('auf modes checked');
 // CMLL→EO: 揃っていないエッジの数は偶数。判定は eoDone と一致(0 個 ⇔ EO 完成)
 const dist = {};
 for (let i = 0; i < 300; i++) {
-  const p = generate('cmllEo', {});
-  check(p.eoBad.length % 2 === 0, `eo bad count odd ${p.eoBad}`);
-  check((p.eoBad.length === 0) === _internal.eoDone(p.after), `eo consistency ${p.eoBad}`);
-  check(C.isSolvedAt(p.after, C.F2B_STICKERS) && cornersSolvedUpToAuf(p.after), 'cmllEo after solved');
-  dist[p.eoBad.length] = (dist[p.eoBad.length] || 0) + 1;
+  const p = generate(i % 2 ? 'cmllEoAuf' : 'cmllEo', {});
+  check(p.eoAnswers.length >= 1 && (i % 2 ? p.aufAnswers.length === p.eoAnswers.length : p.eoAnswers[0].auf === ''), 'eo answers shape');
+  for (const e of p.eoAnswers) {
+    const after = e.after.split('').map(Number);
+    // 記録された「回した後」は実際に AUF → 手順をかけた状態と一致し、CMLL が解けている
+    check(after.join('') === C.applyAlg(C.applyAlg(p.colors, e.auf ? [e.auf] : []), p.alg).join(''), 'eo after matches');
+    check(C.isSolvedAt(after, C.F2B_STICKERS) && cornersSolvedUpToAuf(after), 'cmllEo after solved');
+    check(e.bad.length % 2 === 0, `eo bad count odd ${e.bad}`);
+    check((e.bad.length === 0) === _internal.eoDone(after), `eo consistency ${e.bad}`);
+    dist[e.bad.length] = (dist[e.bad.length] || 0) + 1;
+  }
 }
 // M を 1 回かけても判定が変わらない(揃っている/いないは M 列の向きの基準で不変)
 for (let i = 0; i < 100; i++) {

@@ -14,7 +14,10 @@ let selectedDay = S.dayKey();
 let chartKey = null;
 
 // 出題モード → 記録のキー(AUF なし / AUF ランダムで記録を分ける)
-const drillOf = (cfg) => (cfg.kind === 'eo' ? 'cmllEo' : cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
+const drillOf = (cfg) => {
+  if (cfg.kind === 'eo') return cfg.auf === 'random' ? 'cmllEoAuf' : 'cmllEo';
+  return cfg.auf === 'random' ? 'cmllAuf' : 'cmll';
+};
 const KIND_LABEL = { alg: '手順を当てる', eo: 'CMLL後のEO' };
 const AUF_LABEL = { none: 'AUFなし', random: 'AUFランダム' };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -147,14 +150,15 @@ function renderHome() {
     <div class="card">
       <div class="row between" style="margin-bottom:12px"><span>問題の種類</span>
         <div class="chips" id="kind">${Object.entries(KIND_LABEL).map(([k, v]) => `<button class="chip ${cfg.kind === k ? 'on' : ''}" data-kind="${k}">${v}</button>`).join('')}</div></div>
-      ${cfg.kind === 'eo' ? `<div class="sub" style="margin:-4px 0 12px">手順表の手順を回した後、向きが揃っていないLSEのエッジをすべて選びます(AUF固定)。</div>` : `
       <div class="row between" style="margin-bottom:12px"><span>出題モード</span>
         <div class="chips" id="aufmode">${Object.entries(AUF_LABEL).map(([k, v]) => `<button class="chip ${cfg.auf === k ? 'on' : ''}" data-auf="${k}">${v}</button>`).join('')}</div></div>
-      <div class="sub" style="margin:-4px 0 12px">${cfg.auf === 'random' ? '向きがランダムに変わります。手順の前のAUFも選んで答えます。' : '手順表の手順をそのままかけられる向きで出題します。'}</div>`}
+      <div class="sub" style="margin:-4px 0 12px">${cfg.kind === 'eo'
+        ? (cfg.auf === 'random' ? '向きがランダムに変わります。手順の前のAUFを選び、手順表の手順を回した後に向きが揃っていないLSEのエッジをすべて選びます。' : '手順表の手順を回した後、向きが揃っていないLSEのエッジをすべて選びます。')
+        : (cfg.auf === 'random' ? '向きがランダムに変わります。手順の前のAUFも選んで答えます。' : '手順表の手順をそのままかけられる向きで出題します。')}</div>
       <div class="chips" id="sets">${CMLL_SETS.map((s) => `<button class="chip ${cfg.sets.includes(s) ? 'on' : ''}" data-set="${s}">${s}</button>`).join('')}</div>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>
     </div>
-    <button class="btn primary" id="go-practice">練習スタート<small>${cfg.kind === 'eo' ? 'CMLL後のEO' : `CMLL ・ ${AUF_LABEL[cfg.auf]}`} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順</small></button>
+    <button class="btn primary" id="go-practice">練習スタート<small>${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順</small></button>
     <div class="row" style="gap:10px">
       <button class="btn blue" id="go-test" style="flex:1">⏱ テスト<small>${cfg.testN}問タイムアタック</small></button>
       <button class="btn" id="go-review" style="flex:1" ${reviewN ? '' : 'disabled'}>🔁 復習<small>間違えた問題 ${reviewN}</small></button>
@@ -204,7 +208,12 @@ function startQuiz(mode) {
   }
   if (mode === 'review') {
     const ms = S.get().mistakes.slice(0, 20);
-    quiz.problems = ms.map((m) => ({ ...m.problem, colors: m.problem.colors.split('').map(Number), after: m.problem.after ? m.problem.after.split('').map(Number) : undefined }));
+    quiz.problems = ms.map((m) => {
+      const pr = { ...m.problem, colors: m.problem.colors.split('').map(Number) };
+      // 旧形式(AUF 固定のみ)の EO 問題を読み替える
+      if (pr.eoBad && !pr.eoAnswers) pr.eoAnswers = [{ auf: '', bad: pr.eoBad, after: pr.after }];
+      return pr;
+    });
     quiz.mistakesIds = ms.map((m) => m.id);
     quiz.total = ms.length;
   }
@@ -219,7 +228,7 @@ function buildQuizView() {
   app.innerHTML = `
     <div class="quiz-top">
       <button class="x" id="quit">✕</button>
-      <div style="text-align:center;flex:1"><div style="font-weight:800">${title} ・ ${quiz.mode === 'review' ? 'CMLL' : DRILLS[quiz.drill].full}</div><div class="sub" id="qcount"></div></div>
+      <div style="text-align:center;flex:1"><div style="font-weight:800">${title} ・ ${quiz.mode === 'review' ? 'CMLL' : DRILLS[quiz.drill].name}</div><div class="sub" id="qcount"></div></div>
       ${quiz.mode === 'test' ? '<div class="timer" id="timer">0.00</div>' : '<div class="combo" id="combo"></div>'}
     </div>
     ${quiz.total ? '<div class="progress"><i id="qprog" style="width:0"></i></div>' : ''}
@@ -318,8 +327,8 @@ function nextProblem() {
   quiz.selEdges = [];
   const afterLabel = app.querySelector('#afterlabel');
   if (afterLabel) afterLabel.hidden = true;
-  app.querySelector('#scene').classList.toggle('compact', !!p.eoBad);
-  if (p.eoBad) {
+  app.querySelector('#scene').classList.toggle('compact', !!p.eoAnswers);
+  if (p.eoAnswers) {
     app.querySelector('#choices').innerHTML = eoBoard(p);
     app.querySelector('#eosubmit').onclick = answerEo;
   } else {
@@ -375,7 +384,7 @@ function settle(ok, rect, wrongMsg) {
 
   if (ok) { quiz.correct++; quiz.combo++; quiz.maxCombo = Math.max(quiz.maxCombo, quiz.combo); FX.sfxCorrect(quiz.combo); } else { quiz.combo = 0; FX.sfxWrong(); }
 
-  const stored = { ...p, colors: p.colors.join(''), after: p.after ? p.after.join('') : undefined };
+  const stored = { ...p, colors: p.colors.join('') };
   const { gained, events } = S.recordAnswer({
     drill: p.drill || quiz.drill, caseKey: p.caseKey, ok, mode: quiz.mode === 'test' ? 'test' : 'practice', combo: quiz.combo,
     problem: ok || quiz.mode === 'review' ? null : stored,
@@ -400,7 +409,7 @@ function settle(ok, rect, wrongMsg) {
     ${ok && S.get().settings.autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
     <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(p.scramble)}</div></details>`;
   if (ok && S.get().settings.autoNext) {
-    setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, p.eoBad ? 1600 : 800);
+    setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, p.eoAnswers ? 1600 : 800);
   } else {
     fb.querySelector('#next').onclick = nextProblem;
   }
@@ -409,11 +418,27 @@ function settle(ok, rect, wrongMsg) {
 // CMLL→EO: 選んだエッジの集合が過不足なく一致したら正解
 function answerEo() {
   if (!quiz || quiz.answered) return;
-  quiz.answered = true;
   const p = quiz.current;
+  const withAuf = !!p.aufAnswers;
+  if (withAuf && quiz.selAuf === null) { toast('先にAUFを選んでください'); return; }
+  quiz.answered = true;
+  const auf = withAuf ? quiz.selAuf : '';
+  // AUF が正しければその AUF で回した後、違えば正解の AUF の結果で答え合わせする
+  const entry = p.eoAnswers.find((e) => e.auf === auf);
+  const shown = entry || p.eoAnswers[0];
   const sel = new Set(quiz.selEdges);
-  const bad = new Set(p.eoBad);
-  const ok = sel.size === bad.size && [...sel].every((x) => bad.has(x));
+  const bad = new Set(shown.bad);
+  const edgesOk = sel.size === bad.size && [...sel].every((x) => bad.has(x));
+  const ok = !!entry && edgesOk;
+  if (withAuf) {
+    app.querySelectorAll('.aufbtn').forEach((x) => {
+      x.classList.remove('picked');
+      const a = x.dataset.auf;
+      if (p.aufAnswers.includes(a)) x.classList.add('correct');
+      else if (a === auf) x.classList.add('wrong');
+      else x.classList.add('dim');
+    });
+  }
   app.querySelectorAll('.eocell').forEach((c) => {
     const pos = c.dataset.pos;
     c.classList.remove('sel');
@@ -422,15 +447,17 @@ function answerEo() {
     else if (sel.has(pos)) c.classList.add('extra');
   });
   // 回した後の状態を 3D で見せて確かめられるようにする
-  quiz.view.setColors(p.after);
+  quiz.view.setColors(shown.after.split('').map(Number));
   quiz.view.setView(-55, -20, true);
   const label = app.querySelector('#afterlabel');
-  if (label) label.hidden = false;
+  if (label) { label.hidden = false; label.textContent = withAuf ? `${shown.auf || 'AUFなし'} → CMLLを回した後` : 'CMLLを回した後'; }
   const submit = app.querySelector('#eosubmit');
   submit.disabled = true;
   const missed = [...bad].filter((x) => !sel.has(x)).length;
   const extra = [...sel].filter((x) => !bad.has(x)).length;
-  settle(ok, submit.getBoundingClientRect(), `不正解…(見逃し ${missed} ・ 余分 ${extra})`);
+  let msg = `不正解…(見逃し ${missed} ・ 余分 ${extra})`;
+  if (!entry) msg = edgesOk ? 'エッジは正解、AUFが違います' : `不正解…AUFが違います(正しいAUFの場合: 見逃し ${missed} ・ 余分 ${extra})`;
+  settle(ok, submit.getBoundingClientRect(), msg);
 }
 
 // U 面(上から見た図)の右に、D 面のエッジを後ろ→前の順で縦に並べる(行の高さを揃えて前後を対応させる)
@@ -605,7 +632,7 @@ function histCases(body) {
   const unseen = rows.filter((r) => !r.s.n);
   const mastered = rows.filter((r) => r.s.correct > 0).length;
   body.innerHTML = `
-    <div class="chips" id="cmode" style="margin-bottom:12px">${[['cmll', 'AUFなし'], ['cmllAuf', 'AUFランダム'], ['cmllEo', 'CMLL後のEO']].map(([k, v]) => `<button class="chip ${caseMode === k ? 'on' : ''}" data-m="${k}">${v}</button>`).join('')}</div>
+    <div class="chips" id="cmode" style="margin-bottom:12px">${[['cmll', '手順・AUFなし'], ['cmllAuf', '手順・AUFランダム'], ['cmllEo', 'EO・AUFなし'], ['cmllEoAuf', 'EO・AUFランダム']].map(([k, v]) => `<button class="chip ${caseMode === k ? 'on' : ''}" data-m="${k}">${v}</button>`).join('')}</div>
     <div class="card row between"><div><div class="sub">正解したことのあるケース</div><div class="big">${mastered}<span style="font-size:14px"> / 42</span></div></div>
       <div class="bar" style="width:120px"><i style="width:${pct(mastered, 42)}%"></i></div></div>
     <div class="card"><div class="sub" style="margin-bottom:6px">正答率の低い順(苦手ケースが上)</div>
