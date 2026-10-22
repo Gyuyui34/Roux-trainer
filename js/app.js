@@ -19,6 +19,9 @@ const drillOf = (cfg) => {
   const base = cfg.kind === 'eo' ? (cfg.auf === 'random' ? 'cmllEoAuf' : 'cmllEo') : (cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
   return S.get().settings.algSlot === 'oh' ? `${base}Oh` : base;
 };
+// 練習するケース: 選んだセットのうち、個別に外したケースを除いたもの
+const selectedCases = (cfg) => CMLL_CASES.filter((c) => cfg.sets.includes(c.set) && !(cfg.excluded || []).includes(c.name));
+const cfgLabel = (key) => (key === 'all' ? '全ケース' : key.startsWith('cases:') ? `${key.split(',').length}ケース選択` : key);
 const baseDrill = (k) => k.replace(/Oh$/, '');
 const drillName = (k) => `${DRILLS[baseDrill(k)].name}・${k.endsWith('Oh') ? '片手' : '両手'}`;
 const KIND_LABEL = { alg: '手順を当てる', eo: 'CMLL後のEO' };
@@ -127,7 +130,8 @@ function renderHome() {
   const todayN = Object.values(t.practice).reduce((a, x) => a + x.n + x.testN, 0);
   const goal = d.settings.dailyGoal;
   const cfg = practiceCfg();
-  const setsLabel = cfg.sets.length === CMLL_SETS.length ? '全セット' : cfg.sets.join(' / ');
+  const nSel = selectedCases(cfg).length;
+  const setsLabel = nSel === CMLL_CASES.length ? '全ケース' : (cfg.excluded || []).some((n) => cfg.sets.includes(n.split(' ')[0])) ? `${nSel}ケース` : cfg.sets.join(' / ');
   const reviewN = d.mistakes.length;
   app.innerHTML = `
     <div class="row between" style="margin-bottom:12px">
@@ -162,6 +166,7 @@ function renderHome() {
         : (cfg.auf === 'random' ? '向きがランダムに変わります。手順の前のAUFも選んで答えます。' : '手順表の手順をそのままかけられる向きで出題します。')}</div>
       <div class="opt" style="margin-bottom:0"><span class="sub">CMLL のセット</span></div>
       <div class="chips" id="sets">${CMLL_SETS.map((s) => `<button class="chip ${cfg.sets.includes(s) ? 'on' : ''}" data-set="${s}">${s}</button>`).join('')}</div>
+      <button class="btn" id="pickcases" style="margin:10px 0 0;padding:11px;font-size:15px">ケースを個別に選ぶ<small>選択中 ${nSel} / 42 ケース</small></button>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>
     </div>
     <button class="btn primary" id="go-practice">練習スタート<small>${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順</small></button>
@@ -180,8 +185,11 @@ function renderHome() {
     const sets = new Set(practiceCfg().sets);
     sets.has(b.dataset.set) ? sets.delete(b.dataset.set) : sets.add(b.dataset.set);
     if (!sets.size) { toast('1つ以上選んでください'); return; }
-    update({ sets: CMLL_SETS.filter((s) => sets.has(s)) });
+    // セットを付け直したときは、そのセットのケースを全部選んだ状態に戻す
+    const excluded = (practiceCfg().excluded || []).filter((n) => !(sets.has(b.dataset.set) && n.split(' ')[0] === b.dataset.set));
+    update({ sets: CMLL_SETS.filter((x) => sets.has(x)), excluded });
   };
+  app.querySelector('#pickcases').onclick = openCasePicker;
   const aufEl = app.querySelector('#aufmode');
   if (aufEl) aufEl.onclick = (e) => { const b = e.target.closest('[data-auf]'); if (b) update({ auf: b.dataset.auf }); };
   app.querySelector('#slothome').onclick = (e) => { const b = e.target.closest('[data-slot]'); if (b) { S.updateSettings({ algSlot: b.dataset.slot }); renderHome(); } };
@@ -200,19 +208,20 @@ const algFor = (c, slot) => S.customAlg(c.name, slot) || c.alg;
 const algOf = (c) => algFor(c, S.get().settings.algSlot);
 
 function genOpts(cfg) {
-  return { sets: cfg.sets, stats: cfg.weak ? (S.get().caseStats[drillOf(cfg)] || {}) : null, algOf };
+  return { sets: cfg.sets, only: selectedCases(cfg).map((c) => c.name), stats: cfg.weak ? (S.get().caseStats[drillOf(cfg)] || {}) : null, algOf };
 }
 
 function startQuiz(mode) {
   const cfg = practiceCfg();
   quiz = { mode, cfg, drill: drillOf(cfg), idx: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, answered: false, problems: null, mistakesIds: [] };
   if (mode === 'test') {
-    const pool = CMLL_CASES.filter((c) => cfg.sets.includes(c.set));
+    const pool = selectedCases(cfg);
     const seq = [];
     while (seq.length < cfg.testN) seq.push(...[...pool].sort(() => Math.random() - 0.5));
     quiz.problems = seq.slice(0, cfg.testN).map((c) => ({ ...generate(baseDrill(quiz.drill), { sets: cfg.sets, forceCase: c.name, algOf }), drill: quiz.drill }));
     quiz.total = cfg.testN;
-    quiz.cfgKey = cfg.sets.length === CMLL_SETS.length ? 'all' : cfg.sets.join(',');
+    quiz.cfgKey = pool.length === CMLL_CASES.length ? 'all'
+      : (cfg.excluded || []).length ? `cases:${pool.map((c) => c.name).join(',')}` : cfg.sets.join(',');
   }
   if (mode === 'review') {
     const ms = S.get().mistakes.slice(0, 20);
@@ -468,6 +477,48 @@ function answerEo() {
   settle(ok, submit.getBoundingClientRect(), msg);
 }
 
+// 42 ケースから練習するケースを個別に選ぶ(セットごとにまとめて切り替えも可)
+function openCasePicker() {
+  const cfg = practiceCfg();
+  const sel = new Set(selectedCases(cfg).map((c) => c.name));
+  const body = () => CMLL_SETS.map((set) => {
+    const cs = CMLL_CASES.filter((c) => c.set === set);
+    const n = cs.filter((c) => sel.has(c.name)).length;
+    return `<div class="pick-set"><div class="row between"><b>${set} <span class="sub">${n}/${cs.length}</span></b>
+      <button class="chip" data-all="${set}">${n === cs.length ? '全部外す' : '全部選ぶ'}</button></div>
+      <div class="pick-grid">${cs.map((c) => `<button class="pick ${sel.has(c.name) ? 'on' : ''}" data-c="${esc(c.name)}">${caseDiagram(c)}</button>`).join('')}</div></div>`;
+  }).join('');
+  openSheet(`<h3>練習するケースを選ぶ</h3><div class="sub">タップで選択/解除。選んだケースだけが出題されます。</div>
+    <div id="pickbody" class="pick-body">${body()}</div>
+    <div class="row" style="gap:10px;margin-top:10px"><button class="btn" id="pcancel" style="flex:1;margin:0">やめる</button><button class="btn primary" id="pok" style="flex:2;margin:0">決定(<span id="pn">${sel.size}</span>ケース)</button></div>`,
+  (el, close) => {
+    const refresh = () => { el.querySelector('#pickbody').innerHTML = body(); el.querySelector('#pn').textContent = sel.size; };
+    el.querySelector('#pickbody').onclick = (e) => {
+      const all = e.target.closest('[data-all]');
+      if (all) {
+        const cs = CMLL_CASES.filter((c) => c.set === all.dataset.all);
+        const full = cs.every((c) => sel.has(c.name));
+        cs.forEach((c) => (full ? sel.delete(c.name) : sel.add(c.name)));
+        refresh();
+        return;
+      }
+      const b = e.target.closest('[data-c]');
+      if (!b) return;
+      sel.has(b.dataset.c) ? sel.delete(b.dataset.c) : sel.add(b.dataset.c);
+      refresh();
+    };
+    el.querySelector('#pcancel').onclick = close;
+    el.querySelector('#pok').onclick = () => {
+      if (!sel.size) { toast('1つ以上選んでください'); return; }
+      const sets = CMLL_SETS.filter((x) => CMLL_CASES.some((c) => c.set === x && sel.has(c.name)));
+      const excluded = CMLL_CASES.filter((c) => sets.includes(c.set) && !sel.has(c.name)).map((c) => c.name);
+      S.setLastPractice({ ...practiceCfg(), sets, excluded });
+      close();
+      renderHome();
+    };
+  });
+}
+
 // U 面(上から見た図)の右に、D 面のエッジを後ろ→前の順で縦に並べる(行の高さを揃えて前後を対応させる)
 function eoBoard(p) {
   const cell = (pos, label) => `<button class="eocell" data-pos="${pos}"><b>${label}</b><span>${pos}</span></button>`;
@@ -583,7 +634,7 @@ function histCalendar(body) {
       <table><tr><th>項目</th><th class="r">練習</th><th class="r">正答率</th><th class="r">テスト</th><th class="r">正答率</th></tr>
       ${Object.entries(sel.practice).map(([dr, p]) => `<tr><td>${drillName(dr)}</td><td class="r">${p.n}問</td><td class="r">${p.n ? pct(p.correct, p.n) + '%' : '-'}</td><td class="r">${p.testN}問</td><td class="r">${p.testN ? pct(p.testCorrect, p.testN) + '%' : '-'}</td></tr>`).join('')}
       </table>
-      ${sel.tests.length ? `<h2>この日のテスト</h2><table>${sel.tests.map((t) => `<tr><td>${drillName(t.drill)} ${t.n}問 <span class="sub">${t.cfg === 'all' ? '全セット' : esc(t.cfg)}</span></td><td class="r mono">${fmtTime(t.timeMs)}</td><td class="r">${pct(t.correct, t.n)}%</td></tr>`).join('')}</table>` : ''}`;
+      ${sel.tests.length ? `<h2>この日のテスト</h2><table>${sel.tests.map((t) => `<tr><td>${drillName(t.drill)} ${t.n}問 <span class="sub">${esc(cfgLabel(t.cfg))}</span></td><td class="r mono">${fmtTime(t.timeMs)}</td><td class="r">${pct(t.correct, t.n)}%</td></tr>`).join('')}</table>` : ''}`;
   }
   body.innerHTML = `
     <div class="card"><div class="row between sub" style="margin-bottom:8px"><span>直近${weeks}週間</span><span>枠つき=ノルマ達成</span></div><div class="heat" id="heat">${cells}</div></div>
@@ -601,7 +652,7 @@ function histTests(body) {
   if (!tests.length) { body.innerHTML = '<div class="empty">まだテストの記録がありません。<br>ホームの「テスト」から挑戦できます。</div>'; return; }
   const keys = [...new Set(tests.map((t) => t.key))];
   if (!chartKey || !keys.includes(chartKey)) chartKey = tests[tests.length - 1].key;
-  const label = (k) => { const [dr, cfg, n] = k.split('|'); return `${drillName(dr)} ${n}問 ${cfg === 'all' ? '全セット' : cfg}`; };
+  const label = (k) => { const [dr, cfg, n] = k.split('|'); return `${drillName(dr)} ${n}問 ${cfgLabel(cfg)}`; };
   const list = tests.filter((t) => t.key === chartKey);
   const best = S.bestTest(chartKey);
   body.innerHTML = `

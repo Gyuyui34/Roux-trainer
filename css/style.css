@@ -209,3 +209,9 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 
 .opt { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .opt + .sub { margin-top: -6px !important; }
+
+.pick-body { max-height: 56vh; overflow-y: auto; margin-top: 10px; display: flex; flex-direction: column; gap: 12px; }
+.pick-set .chip { padding: 5px 10px; font-size: 12px; }
+.pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 6px; margin-top: 6px; }
+.pick { padding: 4px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel2); opacity: .4; display: flex; justify-content: center; }
+.pick.on { opacity: 1; border-color: var(--accent); }

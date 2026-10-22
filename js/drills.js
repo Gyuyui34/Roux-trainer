@@ -208,7 +208,7 @@ function pickWeighted(pool, stats) {
 
 function genCmll(opts) {
   const sets = opts.sets && opts.sets.length ? opts.sets : CMLL_SETS;
-  const pool = CMLL_CASES.filter((c) => sets.includes(c.set));
+  const pool = CMLL_CASES.filter((c) => sets.includes(c.set) && (!opts.only || opts.only.includes(c.name)));
   let target;
   if (opts.forceCase) target = CMLL_CASES.find((c) => c.name === opts.forceCase);
   else if (opts.stats) target = pickWeighted(pool, opts.stats);
