@@ -323,12 +323,45 @@ function genEo(opts) {
   throw new Error('問題を生成できませんでした');
 }
 
+// ---------- CMLL 後の EO ----------
+export const LSE_POS = ['UB', 'UL', 'UR', 'UF', 'DF', 'DB'];
+const M_SLICE = new Set(['UB', 'UF', 'DF', 'DB']);
+
+// 向きが揃っていないエッジの位置。センターが M / M' ずれているときは、
+// M 列のエッジは U/D 色が F/B 面を向いているものが「揃っている」(M を 1 回戻すと U/D に来る)
+export function badEdges(colors) {
+  const odd = colors[4] !== 0 && colors[4] !== 3;
+  return LSE_POS.filter((pos) => {
+    const st = C.piecesStickers([pos]).find((i) => colors[i] === 0 || colors[i] === 3);
+    const face = C.FACES[C.STICKERS[st].face];
+    const good = odd && M_SLICE.has(pos) ? face === 'F' || face === 'B' : face === 'U' || face === 'D';
+    return !good;
+  });
+}
+
+function genCmllEo(opts) {
+  const p = genCmll({ ...opts, auf: 'none' });
+  const alg = p.choices[p.answer].label;
+  const after = C.applyAlg(p.colors, alg);
+  const bad = badEdges(after);
+  return {
+    ...p,
+    drill: 'cmllEo',
+    prompt: 'CMLLを回した後、向きが揃っていないエッジをすべて選んでください',
+    alg,
+    eoBad: bad,
+    after,
+    explain: `${p.explain} → 揃っていないエッジ: ${bad.length ? bad.join(' ') : 'なし(全部揃う)'}`,
+  };
+}
+
 export const ENABLED_DRILLS = ['cmll'];
 
 export const DRILLS = {
   fb: { name: 'FB', full: 'ファーストブロック', gen: (o) => genBlock('fb', o), view: [-28, 38], ranges: [[1, 5], [6, 6], [7, 7], [8, 20]] },
   sb: { name: 'SB', full: 'セカンドブロック', gen: (o) => genBlock('sb', o), view: [-28, -35], ranges: [[1, 8], [9, 10], [11, 20]] },
   cmll: { name: 'CMLL', full: 'CMLL(AUFなし)', gen: genCmll, view: [-35, -30] },
+  cmllEo: { name: 'CMLL→EO', full: 'CMLL後のEO', gen: genCmllEo, view: [-35, -30] },
   cmllAuf: { name: 'CMLL+AUF', full: 'CMLL(AUFランダム)', gen: (o) => genCmll({ ...o, auf: 'random' }), view: [-35, -30] },
   eo: { name: 'EO', full: 'LSE EO', gen: genEo, view: [-40, -20], ranges: [[1, 4], [5, 6], [7, 20]] },
 };

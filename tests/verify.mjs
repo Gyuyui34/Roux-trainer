@@ -1,6 +1,6 @@
 // node tests/verify.mjs : 手順表と出題生成の検証
 import * as C from '../js/cube.js';
-import { CMLL_CASES, generate, _internal } from '../js/drills.js';
+import { CMLL_CASES, generate, _internal, badEdges } from '../js/drills.js';
 
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('NG:', msg); } };
@@ -57,5 +57,24 @@ for (let i = 0; i < 60; i++) {
   }
 }
 console.log('auf modes checked');
+
+// CMLL→EO: 揃っていないエッジの数は偶数。判定は eoDone と一致(0 個 ⇔ EO 完成)
+const dist = {};
+for (let i = 0; i < 300; i++) {
+  const p = generate('cmllEo', {});
+  check(p.eoBad.length % 2 === 0, `eo bad count odd ${p.eoBad}`);
+  check((p.eoBad.length === 0) === _internal.eoDone(p.after), `eo consistency ${p.eoBad}`);
+  check(C.isSolvedAt(p.after, C.F2B_STICKERS) && cornersSolvedUpToAuf(p.after), 'cmllEo after solved');
+  dist[p.eoBad.length] = (dist[p.eoBad.length] || 0) + 1;
+}
+// M を 1 回かけても判定が変わらない(揃っている/いないは M 列の向きの基準で不変)
+for (let i = 0; i < 100; i++) {
+  const s = C.applyAlg(C.solved(), C.randomMoves(['M', "M'", 'M2', 'U', "U'", 'U2'], 20));
+  const before = badEdges(s).length;
+  // センターが揃っている(または M2 ずれ)ときは U で揃っていないエッジの数は変わらない
+  if (s[4] === 0 || s[4] === 3) check(badEdges(C.applyAlg(s, ['U'])).length === before, 'U keeps bad count');
+  check(_internal.eoDone(s) === (before === 0), 'eoDone matches badEdges');
+}
+console.log('cmllEo bad-edge counts', JSON.stringify(dist));
 console.log(fail ? `${fail} failures` : 'all passed');
 process.exit(fail ? 1 : 0);

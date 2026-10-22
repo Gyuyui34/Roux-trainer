@@ -14,7 +14,8 @@ let selectedDay = S.dayKey();
 let chartKey = null;
 
 // 出題モード → 記録のキー(AUF なし / AUF ランダムで記録を分ける)
-const drillOf = (cfg) => (cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
+const drillOf = (cfg) => (cfg.kind === 'eo' ? 'cmllEo' : cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
+const KIND_LABEL = { alg: '手順を当てる', eo: 'CMLL後のEO' };
 const AUF_LABEL = { none: 'AUFなし', random: 'AUFランダム' };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
@@ -26,7 +27,7 @@ const accColor = (p) => (p >= 90 ? 'var(--ok)' : p >= 70 ? 'var(--accent)' : 'va
 
 // 練習設定(前回の設定を引き継ぐ)
 function practiceCfg() {
-  return { auf: 'none', ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
+  return { auf: 'none', kind: 'alg', ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
 }
 
 // ---------------- 共通 ----------------
@@ -144,13 +145,16 @@ function renderHome() {
     </div>
     <h2>CMLL のセット</h2>
     <div class="card">
+      <div class="row between" style="margin-bottom:12px"><span>問題の種類</span>
+        <div class="chips" id="kind">${Object.entries(KIND_LABEL).map(([k, v]) => `<button class="chip ${cfg.kind === k ? 'on' : ''}" data-kind="${k}">${v}</button>`).join('')}</div></div>
+      ${cfg.kind === 'eo' ? `<div class="sub" style="margin:-4px 0 12px">手順表の手順を回した後、向きが揃っていないLSEのエッジをすべて選びます(AUF固定)。</div>` : `
       <div class="row between" style="margin-bottom:12px"><span>出題モード</span>
         <div class="chips" id="aufmode">${Object.entries(AUF_LABEL).map(([k, v]) => `<button class="chip ${cfg.auf === k ? 'on' : ''}" data-auf="${k}">${v}</button>`).join('')}</div></div>
-      <div class="sub" style="margin:-4px 0 12px">${cfg.auf === 'random' ? '向きがランダムに変わります。手順の前のAUFも選んで答えます。' : '手順表の手順をそのままかけられる向きで出題します。'}</div>
+      <div class="sub" style="margin:-4px 0 12px">${cfg.auf === 'random' ? '向きがランダムに変わります。手順の前のAUFも選んで答えます。' : '手順表の手順をそのままかけられる向きで出題します。'}</div>`}
       <div class="chips" id="sets">${CMLL_SETS.map((s) => `<button class="chip ${cfg.sets.includes(s) ? 'on' : ''}" data-set="${s}">${s}</button>`).join('')}</div>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>
     </div>
-    <button class="btn primary" id="go-practice">練習スタート<small>CMLL ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順</small></button>
+    <button class="btn primary" id="go-practice">練習スタート<small>${cfg.kind === 'eo' ? 'CMLL後のEO' : `CMLL ・ ${AUF_LABEL[cfg.auf]}`} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順</small></button>
     <div class="row" style="gap:10px">
       <button class="btn blue" id="go-test" style="flex:1">⏱ テスト<small>${cfg.testN}問タイムアタック</small></button>
       <button class="btn" id="go-review" style="flex:1" ${reviewN ? '' : 'disabled'}>🔁 復習<small>間違えた問題 ${reviewN}</small></button>
@@ -168,7 +172,9 @@ function renderHome() {
     if (!sets.size) { toast('1つ以上選んでください'); return; }
     update({ sets: CMLL_SETS.filter((s) => sets.has(s)) });
   };
-  app.querySelector('#aufmode').onclick = (e) => { const b = e.target.closest('[data-auf]'); if (b) update({ auf: b.dataset.auf }); };
+  const aufEl = app.querySelector('#aufmode');
+  if (aufEl) aufEl.onclick = (e) => { const b = e.target.closest('[data-auf]'); if (b) update({ auf: b.dataset.auf }); };
+  app.querySelector('#kind').onclick = (e) => { const b = e.target.closest('[data-kind]'); if (b) update({ kind: b.dataset.kind }); };
   app.querySelector('#weak').onchange = (e) => update({ weak: e.target.checked });
   app.querySelector('#testn').onclick = (e) => { const b = e.target.closest('[data-n]'); if (b) update({ testN: Number(b.dataset.n) }); };
   app.querySelector('#go-practice').onclick = () => startQuiz('practice');
@@ -198,7 +204,7 @@ function startQuiz(mode) {
   }
   if (mode === 'review') {
     const ms = S.get().mistakes.slice(0, 20);
-    quiz.problems = ms.map((m) => ({ ...m.problem, colors: m.problem.colors.split('').map(Number) }));
+    quiz.problems = ms.map((m) => ({ ...m.problem, colors: m.problem.colors.split('').map(Number), after: m.problem.after ? m.problem.after.split('').map(Number) : undefined }));
     quiz.mistakesIds = ms.map((m) => m.id);
     quiz.total = ms.length;
   }
@@ -237,12 +243,26 @@ function buildQuizView() {
     if (v === 'reset') quiz.view.setView(...DRILLS.cmll.view, true);
   };
   sceneEl.appendChild(tools);
+  const afterLabel = document.createElement('div');
+  afterLabel.id = 'afterlabel';
+  afterLabel.className = 'after-label';
+  afterLabel.textContent = 'CMLLを回した後';
+  afterLabel.hidden = true;
+  sceneEl.appendChild(afterLabel);
   app.querySelector('#quit').onclick = () => {
     if (quiz.mode === 'test') askConfirm('テストを中断しますか?', 'このテストは記録されません。', '中断する', endQuiz);
     else endQuiz();
   };
   // AUF ランダムでは AUF と手順の両方を選んだ時点で判定する(順番は自由)
   app.querySelector('#choices').onclick = (e) => {
+    const cellEl = e.target.closest('.eocell');
+    if (cellEl && quiz && !quiz.answered) {
+      const pos = cellEl.dataset.pos;
+      quiz.selEdges = quiz.selEdges.includes(pos) ? quiz.selEdges.filter((x) => x !== pos) : [...quiz.selEdges, pos];
+      cellEl.classList.toggle('sel');
+      FX.sfxTick();
+      return;
+    }
     const b = e.target.closest('.choice');
     if (!b || !quiz || quiz.answered) return;
     if (!quiz.current.aufAnswers) { answer(Number(b.dataset.i), b, null); return; }
@@ -295,8 +315,16 @@ function nextProblem() {
   quiz.view.setColors(p.colors);
   quiz.view.setView(...DRILLS.cmll.view, quiz.idx > 0);
   app.querySelector('#prompt').textContent = p.prompt;
-  app.querySelector('#choices').innerHTML = p.choices.map((c, i) =>
-    `<button class="choice" data-i="${i}"><span>${esc(c.label)}</span><small>${esc(c.sub || '')}</small></button>`).join('');
+  quiz.selEdges = [];
+  const afterLabel = app.querySelector('#afterlabel');
+  if (afterLabel) afterLabel.hidden = true;
+  if (p.eoBad) {
+    app.querySelector('#choices').innerHTML = eoBoard(p);
+    app.querySelector('#eosubmit').onclick = answerEo;
+  } else {
+    app.querySelector('#choices').innerHTML = p.choices.map((c, i) =>
+      `<button class="choice" data-i="${i}"><span>${esc(c.label)}</span><small>${esc(c.sub || '')}</small></button>`).join('');
+  }
   app.querySelector('#feedback').innerHTML = '';
   const qc = app.querySelector('#qcount');
   qc.textContent = quiz.total ? `${quiz.idx + 1} / ${quiz.total}` : `${quiz.idx + 1}問目 ・ 正解 ${quiz.correct}`;
@@ -333,6 +361,12 @@ function answer(i, btn, auf) {
     else if (k === i) b.classList.add('wrong');
     else b.classList.add('dim');
   });
+  settle(ok, btn.getBoundingClientRect(), i === p.answer ? '手順は正解、AUFが違います' : '不正解…');
+}
+
+// 判定後の共通処理(効果音・記録・XP・次の問題へ)
+function settle(ok, rect, wrongMsg) {
+  const p = quiz.current;
   const flash = document.createElement('div');
   flash.className = `flash ${ok ? 'ok' : 'ng'}`;
   document.body.appendChild(flash);
@@ -340,14 +374,14 @@ function answer(i, btn, auf) {
 
   if (ok) { quiz.correct++; quiz.combo++; quiz.maxCombo = Math.max(quiz.maxCombo, quiz.combo); FX.sfxCorrect(quiz.combo); } else { quiz.combo = 0; FX.sfxWrong(); }
 
-  const stored = { ...p, colors: p.colors.join('') };
+  const stored = { ...p, colors: p.colors.join(''), after: p.after ? p.after.join('') : undefined };
   const { gained, events } = S.recordAnswer({
     drill: p.drill || quiz.drill, caseKey: p.caseKey, ok, mode: quiz.mode === 'test' ? 'test' : 'practice', combo: quiz.combo,
     problem: ok || quiz.mode === 'review' ? null : stored,
   });
   quiz.xp += gained;
   if (quiz.mode === 'review' && ok) S.removeMistake(quiz.mistakesIds[quiz.idx]);
-  const r = btn.getBoundingClientRect();
+  const r = rect;
   if (ok) FX.floatText(`+${gained} XP`, r.left + r.width / 2, r.top - 8);
   updateCombo(ok);
   // テスト中はタイムに影響しないよう、演出は完走後にまとめて出す
@@ -360,15 +394,57 @@ function answer(i, btn, auf) {
     return;
   }
   const fb = app.querySelector('#feedback');
-  fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : i === p.answer ? '手順は正解、AUFが違います' : '不正解…'}</div>
+  fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : wrongMsg}</div>
     <div class="sub mono">${esc(p.explain)}</div></div>
     ${ok && S.get().settings.autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
     <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(p.scramble)}</div></details>`;
   if (ok && S.get().settings.autoNext) {
-    setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, 800);
+    setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, p.eoBad ? 1600 : 800);
   } else {
     fb.querySelector('#next').onclick = nextProblem;
   }
+}
+
+// CMLL→EO: 選んだエッジの集合が過不足なく一致したら正解
+function answerEo() {
+  if (!quiz || quiz.answered) return;
+  quiz.answered = true;
+  const p = quiz.current;
+  const sel = new Set(quiz.selEdges);
+  const bad = new Set(p.eoBad);
+  const ok = sel.size === bad.size && [...sel].every((x) => bad.has(x));
+  app.querySelectorAll('.eocell').forEach((c) => {
+    const pos = c.dataset.pos;
+    c.classList.remove('sel');
+    if (bad.has(pos) && sel.has(pos)) c.classList.add('hit');
+    else if (bad.has(pos)) c.classList.add('miss');
+    else if (sel.has(pos)) c.classList.add('extra');
+  });
+  // 回した後の状態を 3D で見せて確かめられるようにする
+  quiz.view.setColors(p.after);
+  quiz.view.setView(-55, -20, true);
+  const label = app.querySelector('#afterlabel');
+  if (label) label.hidden = false;
+  const submit = app.querySelector('#eosubmit');
+  submit.disabled = true;
+  const missed = [...bad].filter((x) => !sel.has(x)).length;
+  const extra = [...sel].filter((x) => !bad.has(x)).length;
+  settle(ok, submit.getBoundingClientRect(), `不正解…(見逃し ${missed} ・ 余分 ${extra})`);
+}
+
+function eoBoard(p) {
+  const cell = (pos, label) => `<button class="eocell" data-pos="${pos}"><b>${label}</b><span>${pos}</span></button>`;
+  return `<div class="eoboard">
+      <div class="eogrid">
+        <i></i>${cell('UB', '後')}<i></i>
+        ${cell('UL', '左')}<i class="eou">U</i>${cell('UR', '右')}
+        <i></i>${cell('UF', '前')}<i></i>
+      </div>
+      <div class="sub" style="text-align:center;margin:8px 0 4px">D面(下)のエッジ</div>
+      <div class="eodrow">${cell('DB', '下・後')}${cell('DF', '下・前')}</div>
+    </div>
+    <details class="scr" style="margin:8px 0"><summary>回す手順を見る</summary><div class="mono">${esc(p.alg)}</div></details>
+    <button class="btn primary" id="eosubmit">回答する<small>何も選ばずに押すと「全部揃う」</small></button>`;
 }
 
 function afterModals(fn) {
@@ -523,7 +599,7 @@ function histCases(body) {
   const unseen = rows.filter((r) => !r.s.n);
   const mastered = rows.filter((r) => r.s.correct > 0).length;
   body.innerHTML = `
-    <div class="chips" id="cmode" style="margin-bottom:12px">${[['cmll', 'AUFなし'], ['cmllAuf', 'AUFランダム']].map(([k, v]) => `<button class="chip ${caseMode === k ? 'on' : ''}" data-m="${k}">${v}</button>`).join('')}</div>
+    <div class="chips" id="cmode" style="margin-bottom:12px">${[['cmll', 'AUFなし'], ['cmllAuf', 'AUFランダム'], ['cmllEo', 'CMLL後のEO']].map(([k, v]) => `<button class="chip ${caseMode === k ? 'on' : ''}" data-m="${k}">${v}</button>`).join('')}</div>
     <div class="card row between"><div><div class="sub">正解したことのあるケース</div><div class="big">${mastered}<span style="font-size:14px"> / 42</span></div></div>
       <div class="bar" style="width:120px"><i style="width:${pct(mastered, 42)}%"></i></div></div>
     <div class="card"><div class="sub" style="margin-bottom:6px">正答率の低い順(苦手ケースが上)</div>

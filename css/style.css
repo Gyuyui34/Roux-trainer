@@ -14,6 +14,8 @@
   --safe-t: env(safe-area-inset-top, 0px);
   color-scheme: dark;
 }
+[hidden] { display: none !important; }
+#next { white-space: nowrap; flex-shrink: 0; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
 body {
@@ -181,3 +183,23 @@ textarea.algin { width: 100%; margin-top: 12px; background: var(--panel2); color
 .aufbtn.correct { border-color: var(--ok); background: rgba(46,204,113,.18); }
 .aufbtn.wrong { border-color: var(--ng); background: rgba(255,77,94,.18); }
 .aufbtn.dim { opacity: .45; }
+
+.eoboard { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+.eogrid { display: grid; grid-template-columns: repeat(3, minmax(0, 60px)); gap: 6px; justify-content: center; }
+.eogrid i { display: block; aspect-ratio: 1; border-radius: 10px; background: #2a2f3a; }
+.eogrid i.eou { display: flex; align-items: center; justify-content: center; font-style: normal; font-weight: 800; color: var(--sub); }
+.eodrow { display: grid; grid-template-columns: repeat(2, minmax(0, 92px)); gap: 6px; justify-content: center; }
+.eocell { aspect-ratio: 1; border-radius: 10px; background: var(--panel2); border: 2px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.eodrow .eocell { aspect-ratio: 2.2; }
+.eocell b { font-size: 14px; }
+.eocell span { font-size: 10px; color: var(--sub); font-family: ui-monospace, Menlo, monospace; }
+.eocell.sel { border-color: var(--ng); background: rgba(255,77,94,.22); }
+.eocell.sel b::before { content: "✕ "; color: var(--ng); }
+.eocell.hit { border-color: var(--ok); background: rgba(46,204,113,.2); }
+.eocell.hit b::before { content: "✕ "; color: var(--ok); }
+.eocell.miss { border-color: var(--accent); border-style: dashed; background: rgba(255,204,51,.15); }
+.eocell.miss b::after { content: " 見逃し"; font-size: 10px; color: var(--accent); }
+.eocell.extra { border-color: var(--ng); background: rgba(255,77,94,.18); }
+.eocell.extra b::after { content: " 余分"; font-size: 10px; color: var(--ng); }
+.after-label { position: absolute; left: 0; top: 4px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 8px; background: var(--blue); color: #fff; }
+#eosubmit { margin-top: 10px; }
