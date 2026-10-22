@@ -182,7 +182,8 @@ export const BADGES = [
 function summary() {
   let total = 0;
   for (const d of Object.values(data.days)) for (const p of Object.values(d.practice)) total += p.n + p.testN;
-  const cm = data.caseStats.cmll || {};
+  const cm = { ...(data.caseStats.cmllAuf || {}) };
+  for (const [k, v] of Object.entries(data.caseStats.cmll || {})) if (v.correct > 0 || !cm[k]) cm[k] = v;
   return {
     total,
     bestStreak: data.streak.best,

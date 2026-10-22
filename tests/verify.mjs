@@ -40,5 +40,22 @@ for (const drill of ['fb', 'sb', 'cmll', 'eo']) {
   }
   console.log(drill, 'ok', `${((Date.now() - t0) / 40).toFixed(1)}ms/問`);
 }
+// AUF モード: なし=手順をそのままかければ解ける / ランダム=正解 AUF の後に手順で解ける
+const solvedCmll = (s) => ['', 'y', 'y2', "y'", 'x', 'x2', "x'", 'z', "z'", 'z2'].some((q) => {
+  const t = C.applyAlg(s, q ? [q] : []);
+  return C.isSolvedAt(t, C.F2B_STICKERS) && cornersSolvedUpToAuf(t);
+});
+for (let i = 0; i < 60; i++) {
+  const p = generate('cmll', {});
+  check(p.aufAnswers === null && solvedCmll(C.applyAlg(p.colors, p.choices[p.answer].label)), 'cmll no-auf direct');
+  check(p.colors[4] === 0, 'cmll no-auf centers');
+  const r = generate('cmllAuf', {});
+  check(r.drill === 'cmllAuf' && r.aufAnswers.length >= 1, 'cmllAuf answers');
+  for (const a of ['', 'U', 'U2', "U'"]) {
+    const ok = solvedCmll(C.applyAlg(C.applyAlg(r.colors, a ? [a] : []), r.choices[r.answer].label));
+    check(ok === r.aufAnswers.includes(a), `cmllAuf auf ${a} ok=${ok} answers=${r.aufAnswers}`);
+  }
+}
+console.log('auf modes checked');
 console.log(fail ? `${fail} failures` : 'all passed');
 process.exit(fail ? 1 : 0);

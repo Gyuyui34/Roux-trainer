@@ -174,3 +174,10 @@ svg.chart { width: 100%; height: 160px; display: block; }
 .algtext { font-size: 13px; margin-top: 3px; word-break: break-word; }
 textarea.algin { width: 100%; margin-top: 12px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px;
   font: 15px ui-monospace, "SF Mono", Menlo, monospace; -webkit-user-select: text; user-select: text; resize: vertical; }
+
+.aufrow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 9px; }
+.aufbtn { padding: 11px 0; border-radius: 12px; background: var(--panel); border: 2px solid var(--line); font: 700 16px ui-monospace, "SF Mono", Menlo, monospace; }
+.aufbtn.picked, .choice.picked { border-color: var(--blue); background: rgba(76,141,255,.16); }
+.aufbtn.correct { border-color: var(--ok); background: rgba(46,204,113,.18); }
+.aufbtn.wrong { border-color: var(--ng); background: rgba(255,77,94,.18); }
+.aufbtn.dim { opacity: .45; }

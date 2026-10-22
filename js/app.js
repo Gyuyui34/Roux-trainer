@@ -13,6 +13,9 @@ let historyTab = 'calendar';
 let selectedDay = S.dayKey();
 let chartKey = null;
 
+// 出題モード → 記録のキー(AUF なし / AUF ランダムで記録を分ける)
+const drillOf = (cfg) => (cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
+const AUF_LABEL = { none: 'AUFなし', random: 'AUFランダム' };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 const fmtTime = (ms) => {
@@ -23,7 +26,7 @@ const accColor = (p) => (p >= 90 ? 'var(--ok)' : p >= 70 ? 'var(--accent)' : 'va
 
 // 練習設定(前回の設定を引き継ぐ)
 function practiceCfg() {
-  return S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 };
+  return { auf: 'none', ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
 }
 
 // ---------------- 共通 ----------------
@@ -141,10 +144,13 @@ function renderHome() {
     </div>
     <h2>CMLL のセット</h2>
     <div class="card">
+      <div class="row between" style="margin-bottom:12px"><span>出題モード</span>
+        <div class="chips" id="aufmode">${Object.entries(AUF_LABEL).map(([k, v]) => `<button class="chip ${cfg.auf === k ? 'on' : ''}" data-auf="${k}">${v}</button>`).join('')}</div></div>
+      <div class="sub" style="margin:-4px 0 12px">${cfg.auf === 'random' ? '向きがランダムに変わります。手順の前のAUFも選んで答えます。' : '手順表の手順をそのままかけられる向きで出題します。'}</div>
       <div class="chips" id="sets">${CMLL_SETS.map((s) => `<button class="chip ${cfg.sets.includes(s) ? 'on' : ''}" data-set="${s}">${s}</button>`).join('')}</div>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>
     </div>
-    <button class="btn primary" id="go-practice">練習スタート<small>CMLL ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順</small></button>
+    <button class="btn primary" id="go-practice">練習スタート<small>CMLL ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順</small></button>
     <div class="row" style="gap:10px">
       <button class="btn blue" id="go-test" style="flex:1">⏱ テスト<small>${cfg.testN}問タイムアタック</small></button>
       <button class="btn" id="go-review" style="flex:1" ${reviewN ? '' : 'disabled'}>🔁 復習<small>間違えた問題 ${reviewN}</small></button>
@@ -162,6 +168,7 @@ function renderHome() {
     if (!sets.size) { toast('1つ以上選んでください'); return; }
     update({ sets: CMLL_SETS.filter((s) => sets.has(s)) });
   };
+  app.querySelector('#aufmode').onclick = (e) => { const b = e.target.closest('[data-auf]'); if (b) update({ auf: b.dataset.auf }); };
   app.querySelector('#weak').onchange = (e) => update({ weak: e.target.checked });
   app.querySelector('#testn').onclick = (e) => { const b = e.target.closest('[data-n]'); if (b) update({ testN: Number(b.dataset.n) }); };
   app.querySelector('#go-practice').onclick = () => startQuiz('practice');
@@ -175,17 +182,17 @@ const SLOT_NAMES = { two: '両手', oh: '片手' };
 const algOf = (c) => S.customAlg(c.name, S.get().settings.algSlot) || c.alg;
 
 function genOpts(cfg) {
-  return { sets: cfg.sets, stats: cfg.weak ? (S.get().caseStats.cmll || {}) : null, algOf };
+  return { sets: cfg.sets, stats: cfg.weak ? (S.get().caseStats[drillOf(cfg)] || {}) : null, algOf };
 }
 
 function startQuiz(mode) {
   const cfg = practiceCfg();
-  quiz = { mode, cfg, drill: 'cmll', idx: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, answered: false, problems: null, mistakesIds: [] };
+  quiz = { mode, cfg, drill: drillOf(cfg), idx: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, answered: false, problems: null, mistakesIds: [] };
   if (mode === 'test') {
     const pool = CMLL_CASES.filter((c) => cfg.sets.includes(c.set));
     const seq = [];
     while (seq.length < cfg.testN) seq.push(...[...pool].sort(() => Math.random() - 0.5));
-    quiz.problems = seq.slice(0, cfg.testN).map((c) => generate('cmll', { sets: cfg.sets, forceCase: c.name, algOf }));
+    quiz.problems = seq.slice(0, cfg.testN).map((c) => generate(quiz.drill, { sets: cfg.sets, forceCase: c.name, algOf }));
     quiz.total = cfg.testN;
     quiz.cfgKey = cfg.sets.length === CMLL_SETS.length ? 'all' : cfg.sets.join(',');
   }
@@ -206,12 +213,13 @@ function buildQuizView() {
   app.innerHTML = `
     <div class="quiz-top">
       <button class="x" id="quit">✕</button>
-      <div style="text-align:center;flex:1"><div style="font-weight:800">${title} ・ CMLL</div><div class="sub" id="qcount"></div></div>
+      <div style="text-align:center;flex:1"><div style="font-weight:800">${title} ・ ${quiz.mode === 'review' ? 'CMLL' : DRILLS[quiz.drill].full}</div><div class="sub" id="qcount"></div></div>
       ${quiz.mode === 'test' ? '<div class="timer" id="timer">0.00</div>' : '<div class="combo" id="combo"></div>'}
     </div>
     ${quiz.total ? '<div class="progress"><i id="qprog" style="width:0"></i></div>' : ''}
     <div id="scene" class="scene"></div>
     <div class="prompt" id="prompt"></div>
+    <div class="aufrow" id="aufrow" hidden>${['', 'U', 'U2', "U'"].map((a) => `<button class="aufbtn" data-auf="${a}">${a || 'なし'}</button>`).join('')}</div>
     <div class="choices" id="choices"></div>
     <div class="feedback" id="feedback"></div>
   `;
@@ -233,9 +241,21 @@ function buildQuizView() {
     if (quiz.mode === 'test') askConfirm('テストを中断しますか?', 'このテストは記録されません。', '中断する', endQuiz);
     else endQuiz();
   };
+  // AUF ランダムでは AUF と手順の両方を選んだ時点で判定する(順番は自由)
   app.querySelector('#choices').onclick = (e) => {
     const b = e.target.closest('.choice');
-    if (b) answer(Number(b.dataset.i), b);
+    if (!b || !quiz || quiz.answered) return;
+    if (!quiz.current.aufAnswers) { answer(Number(b.dataset.i), b, null); return; }
+    quiz.selAlg = Number(b.dataset.i);
+    app.querySelectorAll('.choice').forEach((x) => x.classList.toggle('picked', x === b));
+    if (quiz.selAuf !== null) answer(quiz.selAlg, b, quiz.selAuf);
+  };
+  app.querySelector('#aufrow').onclick = (e) => {
+    const b = e.target.closest('.aufbtn');
+    if (!b || !quiz || quiz.answered) return;
+    quiz.selAuf = b.dataset.auf;
+    app.querySelectorAll('.aufbtn').forEach((x) => x.classList.toggle('picked', x === b));
+    if (quiz.selAlg !== null) answer(quiz.selAlg, app.querySelector(`.choice[data-i="${quiz.selAlg}"]`), quiz.selAuf);
   };
 }
 
@@ -264,9 +284,14 @@ function tickTimer() {
 function nextProblem() {
   if (!quiz) return;
   if (quiz.total && quiz.idx >= quiz.total) { finishQuiz(); return; }
-  const p = quiz.problems ? quiz.problems[quiz.idx] : generate('cmll', genOpts(quiz.cfg));
+  const p = quiz.problems ? quiz.problems[quiz.idx] : generate(quiz.drill, genOpts(quiz.cfg));
   quiz.current = p;
   quiz.answered = false;
+  quiz.selAlg = null;
+  quiz.selAuf = null;
+  const aufRow = app.querySelector('#aufrow');
+  aufRow.hidden = !p.aufAnswers;
+  aufRow.querySelectorAll('.aufbtn').forEach((x) => { x.className = 'aufbtn'; });
   quiz.view.setColors(p.colors);
   quiz.view.setView(...DRILLS.cmll.view, quiz.idx > 0);
   app.querySelector('#prompt').textContent = p.prompt;
@@ -287,11 +312,21 @@ function updateCombo(pop) {
   if (pop) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
 }
 
-function answer(i, btn) {
+function answer(i, btn, auf) {
   if (!quiz || quiz.answered) return;
   quiz.answered = true;
   const p = quiz.current;
-  const ok = i === p.answer;
+  app.querySelectorAll('.picked').forEach((x) => x.classList.remove('picked'));
+  const aufOk = !p.aufAnswers || p.aufAnswers.includes(auf);
+  const ok = i === p.answer && aufOk;
+  if (p.aufAnswers) {
+    app.querySelectorAll('.aufbtn').forEach((x) => {
+      const a = x.dataset.auf;
+      if (p.aufAnswers.includes(a)) x.classList.add('correct');
+      else if (a === auf) x.classList.add('wrong');
+      else x.classList.add('dim');
+    });
+  }
   const btns = [...app.querySelectorAll('.choice')];
   btns.forEach((b, k) => {
     if (k === p.answer) b.classList.add('correct');
@@ -307,7 +342,7 @@ function answer(i, btn) {
 
   const stored = { ...p, colors: p.colors.join('') };
   const { gained, events } = S.recordAnswer({
-    drill: 'cmll', caseKey: p.caseKey, ok, mode: quiz.mode === 'test' ? 'test' : 'practice', combo: quiz.combo,
+    drill: p.drill || quiz.drill, caseKey: p.caseKey, ok, mode: quiz.mode === 'test' ? 'test' : 'practice', combo: quiz.combo,
     problem: ok || quiz.mode === 'review' ? null : stored,
   });
   quiz.xp += gained;
@@ -325,7 +360,7 @@ function answer(i, btn) {
     return;
   }
   const fb = app.querySelector('#feedback');
-  fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : '不正解…'}</div>
+  fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : i === p.answer ? '手順は正解、AUFが違います' : '不正解…'}</div>
     <div class="sub mono">${esc(p.explain)}</div></div>
     ${ok && S.get().settings.autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
     <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(p.scramble)}</div></details>`;
@@ -345,7 +380,7 @@ function finishQuiz() {
   if (quiz.mode === 'test') {
     quiz.finished = true;
     const timeMs = performance.now() - quiz.startT;
-    const { pb, prev, events } = S.recordTest({ drill: 'cmll', cfg: quiz.cfgKey, n: quiz.total, correct: quiz.correct, timeMs });
+    const { pb, prev, events } = S.recordTest({ drill: quiz.drill, cfg: quiz.cfgKey, n: quiz.total, correct: quiz.correct, timeMs });
     renderResult({ timeMs, pb, prev });
     afterModals(() => {
       if (pb) { FX.sfxFanfare(); FX.confetti(); }
@@ -480,20 +515,23 @@ function chartSvg(list) {
   </svg>`;
 }
 
+let caseMode = 'cmll';
 function histCases(body) {
-  const stats = S.get().caseStats.cmll || {};
+  const stats = S.get().caseStats[caseMode] || {};
   const rows = CMLL_CASES.map((c) => ({ c, s: stats[c.name] || { n: 0, correct: 0 } }));
   const seen = rows.filter((r) => r.s.n).sort((a, b) => a.s.correct / a.s.n - b.s.correct / b.s.n || b.s.n - a.s.n);
   const unseen = rows.filter((r) => !r.s.n);
   const mastered = rows.filter((r) => r.s.correct > 0).length;
   body.innerHTML = `
+    <div class="chips" id="cmode" style="margin-bottom:12px">${[['cmll', 'AUFなし'], ['cmllAuf', 'AUFランダム']].map(([k, v]) => `<button class="chip ${caseMode === k ? 'on' : ''}" data-m="${k}">${v}</button>`).join('')}</div>
     <div class="card row between"><div><div class="sub">正解したことのあるケース</div><div class="big">${mastered}<span style="font-size:14px"> / 42</span></div></div>
       <div class="bar" style="width:120px"><i style="width:${pct(mastered, 42)}%"></i></div></div>
     <div class="card"><div class="sub" style="margin-bottom:6px">正答率の低い順(苦手ケースが上)</div>
     <table><tr><th>セット</th><th>手順</th><th class="r">回数</th><th class="r">正答率</th></tr>
-    ${seen.map(({ c, s }) => { const p = pct(s.correct, s.n); return `<tr><td>${c.set}</td><td class="mono" style="font-size:11px">${esc(c.alg)}</td><td class="r">${s.n}</td><td class="r"><span class="acc-bar"><i style="width:${p}%;background:${accColor(p)}"></i></span> ${p}%</td></tr>`; }).join('')}
-    ${unseen.map(({ c }) => `<tr style="opacity:.45"><td>${c.set}</td><td class="mono" style="font-size:11px">${esc(c.alg)}</td><td class="r">0</td><td class="r">未出題</td></tr>`).join('')}
+    ${seen.map(({ c, s }) => { const p = pct(s.correct, s.n); return `<tr><td>${c.set}</td><td class="mono" style="font-size:11px">${esc(algOf(c))}</td><td class="r">${s.n}</td><td class="r"><span class="acc-bar"><i style="width:${p}%;background:${accColor(p)}"></i></span> ${p}%</td></tr>`; }).join('')}
+    ${unseen.map(({ c }) => `<tr style="opacity:.45"><td>${c.set}</td><td class="mono" style="font-size:11px">${esc(algOf(c))}</td><td class="r">0</td><td class="r">未出題</td></tr>`).join('')}
     </table></div>`;
+  body.querySelector('#cmode').onclick = (e) => { const b = e.target.closest('[data-m]'); if (b) { caseMode = b.dataset.m; renderHistory(); } };
 }
 
 function histReview(body) {

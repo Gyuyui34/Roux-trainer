@@ -53,13 +53,15 @@ const ROTATIONS = (() => {
   return out;
 })();
 
+// F2B が揃う向きへの持ち替え(なければ null)
+function f2bRotation(state) {
+  return ROTATIONS.find((q) => C.isSolvedAt(C.applyAlg(state, q), C.F2B_STICKERS)) || null;
+}
+
 // F2B が揃う向きに持ち替えた状態を返す(揃わなければ null)
 function orientF2B(state) {
-  for (const q of ROTATIONS) {
-    const s = C.applyAlg(state, q);
-    if (C.isSolvedAt(s, C.F2B_STICKERS)) return s;
-  }
-  return null;
+  const q = f2bRotation(state);
+  return q ? C.applyAlg(state, q) : null;
 }
 
 // 手順の逆で作った盤面から CMLL ケースの識別子を求める(手順前後の AUF は同一視)
@@ -211,12 +213,28 @@ function genCmll(opts) {
   if (opts.forceCase) target = CMLL_CASES.find((c) => c.name === opts.forceCase);
   else if (opts.stats) target = pickWeighted(pool, opts.stats);
   else target = pick(pool);
+  const algText = opts.algOf ? opts.algOf(target) : target.alg;
+  const algMoves = C.parseAlg(algText);
   const lse = C.randomMoves(LSE_MOVES, 16);
-  const setup = [...lse, ...target.inv, ...parse(pick(AUFS))];
+  // LSE をかき混ぜた後、コーナーを揃った向きに戻しておく
+  const align = AUFS.find((a) => C.isSolvedAt(C.applyAlg(C.solved(), [...lse, ...parse(a)]), UC));
+  const setup = [...lse, ...parse(align)];
+  if (opts.auf === 'random') {
+    setup.push(...target.inv, ...parse(pick(AUFS)));
+  } else {
+    // AUF なし: 出題に使う手順をそのままかければ解ける向きで出す
+    setup.push(...C.invertAlg(algMoves));
+    setup.push(...f2bRotation(C.applyAlg(C.solved(), setup)));
+  }
   // M 列を回してセンターを揃える(コーナーには影響しない)
   const fix = ['M', 'M2', "M'"].find((m) => C.applyAlg(C.solved(), [...setup, m])[4] === 0);
   if (C.applyAlg(C.solved(), setup)[4] !== 0) setup.push(fix);
   const colors = C.applyAlg(C.solved(), setup);
+  // 手順の前に必要な AUF(対称なケースでは複数ありうる)
+  const aufAnswers = AUFS.filter((a) => {
+    const st = orientF2B(C.applyAlg(C.applyAlg(colors, parse(a)), algMoves));
+    return st && cornersUpToAuf(st);
+  });
   let others = pool.filter((c) => c !== target);
   // 同じセットの別ケースを優先して紛らわしくする
   const same = shuffle(others.filter((c) => c.set === target.set));
@@ -229,14 +247,15 @@ function genCmll(opts) {
   const wrong = others.slice(0, 3);
   const items = shuffle([target, ...wrong]);
   return {
-    drill: 'cmll',
+    drill: opts.auf === 'random' ? 'cmllAuf' : 'cmll',
     colors,
     scramble: setup.join(' '),
-    prompt: 'このCMLLを解く手順は?',
+    prompt: opts.auf === 'random' ? 'AUFと手順を選んでください' : 'このCMLLを解く手順は?',
+    aufAnswers: opts.auf === 'random' ? aufAnswers : null,
     choices: items.map((c) => ({ label: opts.algOf ? opts.algOf(c) : c.alg, sub: c.set })),
     answer: items.indexOf(target),
     caseKey: target.name,
-    explain: `${target.set}セット: ${opts.algOf ? opts.algOf(target) : target.alg}`,
+    explain: `${target.set}セット: ${opts.auf === 'random' ? `${aufAnswers.map((a) => a || 'AUFなし').join(' / ')} → ` : ''}${algText}`,
   };
 }
 
@@ -309,7 +328,8 @@ export const ENABLED_DRILLS = ['cmll'];
 export const DRILLS = {
   fb: { name: 'FB', full: 'ファーストブロック', gen: (o) => genBlock('fb', o), view: [-28, 38], ranges: [[1, 5], [6, 6], [7, 7], [8, 20]] },
   sb: { name: 'SB', full: 'セカンドブロック', gen: (o) => genBlock('sb', o), view: [-28, -35], ranges: [[1, 8], [9, 10], [11, 20]] },
-  cmll: { name: 'CMLL', full: 'CMLL', gen: genCmll, view: [-35, -30] },
+  cmll: { name: 'CMLL', full: 'CMLL(AUFなし)', gen: genCmll, view: [-35, -30] },
+  cmllAuf: { name: 'CMLL+AUF', full: 'CMLL(AUFランダム)', gen: (o) => genCmll({ ...o, auf: 'random' }), view: [-35, -30] },
   eo: { name: 'EO', full: 'LSE EO', gen: genEo, view: [-40, -20], ranges: [[1, 4], [5, 6], [7, 20]] },
 };
 
