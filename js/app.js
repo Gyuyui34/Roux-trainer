@@ -318,6 +318,7 @@ function nextProblem() {
   quiz.selEdges = [];
   const afterLabel = app.querySelector('#afterlabel');
   if (afterLabel) afterLabel.hidden = true;
+  app.querySelector('#scene').classList.toggle('compact', !!p.eoBad);
   if (p.eoBad) {
     app.querySelector('#choices').innerHTML = eoBoard(p);
     app.querySelector('#eosubmit').onclick = answerEo;
@@ -432,19 +433,24 @@ function answerEo() {
   settle(ok, submit.getBoundingClientRect(), `不正解…(見逃し ${missed} ・ 余分 ${extra})`);
 }
 
+// U 面(上から見た図)の右に、D 面のエッジを後ろ→前の順で縦に並べる(行の高さを揃えて前後を対応させる)
 function eoBoard(p) {
   const cell = (pos, label) => `<button class="eocell" data-pos="${pos}"><b>${label}</b><span>${pos}</span></button>`;
   return `<div class="eoboard">
-      <div class="eogrid">
-        <i></i>${cell('UB', '後')}<i></i>
-        ${cell('UL', '左')}<i class="eou">U</i>${cell('UR', '右')}
-        <i></i>${cell('UF', '前')}<i></i>
-      </div>
-      <div class="sub" style="text-align:center;margin:8px 0 4px">D面(下)のエッジ</div>
-      <div class="eodrow">${cell('DB', '下・後')}${cell('DF', '下・前')}</div>
+      <div class="eopanel"><div class="eotitle">U面のエッジ</div>
+        <div class="eogrid">
+          <i></i>${cell('UB', '後')}<i></i>
+          ${cell('UL', '左')}<i class="eoc">U</i>${cell('UR', '右')}
+          <i></i>${cell('UF', '前')}<i></i>
+        </div></div>
+      <div class="eopanel"><div class="eotitle">D面のエッジ</div>
+        <div class="eodcol">${cell('DB', '後')}<i class="eoc">D</i>${cell('DF', '前')}</div></div>
     </div>
-    <details class="scr" style="margin:8px 0"><summary>回す手順を見る</summary><div class="mono">${esc(p.alg)}</div></details>
-    <button class="btn primary" id="eosubmit">回答する<small>何も選ばずに押すと「全部揃う」</small></button>`;
+    <div class="row between" style="margin-top:8px;align-items:flex-start;gap:10px">
+      <details class="scr" style="margin:0;flex:1;min-width:0"><summary>回す手順を見る</summary><div class="mono">${esc(p.alg)}</div></details>
+      <button class="btn primary" id="eosubmit">回答する</button>
+    </div>
+    <div class="sub" style="margin-top:4px">何も選ばずに回答すると「全部揃う」</div>`;
 }
 
 function afterModals(fn) {
