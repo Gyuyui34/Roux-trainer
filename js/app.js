@@ -359,6 +359,7 @@ function nextProblem() {
   const afterLabel = app.querySelector('#afterlabel');
   if (afterLabel) afterLabel.hidden = true;
   app.querySelector('#scene').classList.toggle('compact', !!p.eoAnswers);
+  app.querySelector('#scene').classList.remove('solved-view');
   if (p.eoAnswers) {
     app.querySelector('#choices').innerHTML = eoBoard(p);
     app.querySelector('#eosubmit').onclick = answerEo;
@@ -440,6 +441,9 @@ function settle(ok, rect, wrongMsg) {
   const fb = app.querySelector('#feedback');
   // SB は答えを覚えるのが目的なので、正解しても次へを押すまで答えを出しておく
   const autoNext = ok && S.get().settings.autoNext && !p.sbSols;
+  // 解答例の表まで 1 画面に収まるよう、キューブを小さくする
+  fb.classList.toggle('sb', !!p.sbSols);
+  if (p.sbSols) app.querySelector('#scene').classList.add('solved-view');
   fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : wrongMsg}</div>
     ${p.sbSols ? '' : `<div class="sub mono">${esc(p.explain)}</div>`}</div>
     ${autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
@@ -452,19 +456,17 @@ function settle(ok, rect, wrongMsg) {
   }
 }
 
-// SB の解答例: square ごとに短い順。最短の行を強調し、手を種類ごとに色分けする
-const MOVE_CLASS = { R: 'mv-R', r: 'mv-r', U: 'mv-U', M: 'mv-M' };
+// SB の解答例: square ごとに短い順。最短の行を強調する
 function sbTable(p) {
   const best = Math.min(...Object.values(p.sbSols).map((l) => l[0].split(' ').length));
   const rows = Object.entries(p.sbSols).map(([k, list]) => list.map((alg, i) => {
     const moves = alg.split(' ');
     const top = moves.length === best;
-    return `<tr class="${top ? 'best' : ''}">${i ? '' : `<th rowspan="${list.length}" class="sq">${k === 'front' ? 'Front' : 'Back'}<small>square</small></th>`}
+    return `<tr class="${top ? 'best' : ''}">${i ? '' : `<th rowspan="${list.length}" class="sq">${k === 'front' ? 'Front' : 'Back'}</th>`}
       <td class="n">${top ? '★' : ''}${moves.length}手</td>
-      <td class="alg">${moves.map((m) => `<span class="mv ${MOVE_CLASS[m[0]]}">${esc(m)}</span>`).join('')}</td></tr>`;
+      <td class="alg">${esc(alg)}</td></tr>`;
   }).join('')).join('');
-  return `<table class="soltab">${rows}</table>
-    <div class="sub legend"><span class="mv mv-R">R</span><span class="mv mv-r">r</span><span class="mv mv-U">U</span><span class="mv mv-M">M</span> ★=最短</div>`;
+  return `<table class="soltab">${rows}</table>`;
 }
 
 // 答えを見る: 正解を表示して不正解として記録する

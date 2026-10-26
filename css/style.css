@@ -102,17 +102,17 @@ h2 { font-size: 16px; margin: 20px 0 8px; color: var(--sub); font-weight: 600; }
 .aufrow.two .aufbtn { font: 800 15px -apple-system, sans-serif; }
 .choices.nums { grid-template-columns: repeat(4, 1fr); }
 .choices.nums .choice { justify-content: center; text-align: center; padding: 14px 0; font-size: 18px; font-weight: 800; }
-.soltab { width: 100%; border-collapse: separate; border-spacing: 0 4px; margin-top: 10px; }
-.soltab td, .soltab th { padding: 8px 6px; background: var(--panel); }
-.soltab th.sq { width: 58px; text-align: center; font-weight: 800; border-radius: 10px 0 0 10px; vertical-align: middle; }
-.soltab th.sq small { display: block; font-size: 10px; color: var(--sub); font-weight: 600; }
-.soltab td.n { width: 46px; white-space: nowrap; font-weight: 800; text-align: right; color: var(--sub); }
-.soltab td.alg { border-radius: 0 10px 10px 0; }
+.soltab { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 14px; }
+.soltab td, .soltab th { padding: 4px 6px; border-top: 1px solid var(--line); }
+.soltab th.sq { width: 44px; text-align: left; font-weight: 800; vertical-align: middle; }
+.soltab td.n { width: 34px; white-space: nowrap; font-weight: 800; text-align: right; color: var(--sub); }
+.soltab td.alg { font: 700 14px ui-monospace, "SF Mono", Menlo, monospace; white-space: nowrap; }
 .soltab tr.best td { background: rgba(46,204,113,.16); }
 .soltab tr.best td.n { color: var(--ok); }
-.mv { display: inline-block; min-width: 26px; margin: 2px 3px 2px 0; padding: 3px 5px; border-radius: 6px; text-align: center; font: 800 15px ui-monospace, "SF Mono", Menlo, monospace; color: #111; }
-.mv-R { background: #ff8a80; } .mv-r { background: #ffb74d; } .mv-U { background: #fff176; } .mv-M { background: #81d4fa; }
-.legend { margin-top: 4px; } .legend .mv { font-size: 11px; min-width: 18px; padding: 1px 4px; }
+.scene.solved-view { max-height: 24vh; }
+.feedback.sb .res { font-size: 17px; }
+.feedback.sb #next { padding: 8px 18px !important; }
+.feedback.sb .scr { margin-top: 4px; }
 .view-tools { position: absolute; right: 0; bottom: 4px; display: flex; gap: 6px; }
 .view-tools button { font-size: 12px; padding: 6px 10px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); color: var(--sub); }
 .prompt { font-weight: 700; margin: 4px 0 10px; font-size: 15px; }
@@ -234,3 +234,9 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 6px; margin-top: 6px; }
 .pick { padding: 4px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel2); opacity: .4; display: flex; justify-content: center; }
 .pick.on { opacity: 1; border-color: var(--accent); }
+@media (max-height: 700px) {
+  .scene.solved-view { max-height: 19vh; }
+  .choices.nums .choice { padding: 9px 0; }
+  .aufrow.two .aufbtn { padding: 8px 0; }
+  .soltab td, .soltab th { padding: 2px 6px; }
+}
