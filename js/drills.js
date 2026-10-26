@@ -401,13 +401,18 @@ function blocksOf(moves) {
   return out;
 }
 
-function genSbSquare() {
-  for (let attempt = 0; attempt < 200; attempt++) {
+// opts.minLen / opts.maxLen: 出題する最短手数(front と back の短い方)の範囲
+function genSbSquare(opts = {}) {
+  const minLen = Math.max(2, opts.minLen || 2), maxLen = Math.max(minLen, opts.maxLen || 99);
+  for (let attempt = 0; attempt < 20000; attempt++) {
     const scramble = C.randomMoves(SB_MOVES, 30);
     // M 列でセンターを揃える(SB のピースには影響しない)
     const fix = ['', 'M', 'M2', "M'"].find((m) => C.applyAlg(C.solved(), [...scramble, ...parse(m)])[4] === 0);
     scramble.push(...parse(fix));
     const tracked = trackedApply(trackedSolved(), scramble);
+    // 表の値がそのまま最短手数なので、範囲外の盤面は解を探す前に捨てる
+    const d = Math.min(...Object.keys(SQUARES).map((k) => getSq(k).h(getSq(k).locsFromState(tracked))));
+    if (d < minLen || d > maxLen) continue;
     const res = Object.keys(SQUARES).map((k) => {
       const done = (moves) => C.isSolvedAt(colorsOf(trackedApply(tracked, moves)), SQ_STICKERS[k]);
       // 短い順に 3 つ。無駄な手を含む解(途中で揃う・1 手抜いても揃う)と、
