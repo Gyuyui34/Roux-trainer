@@ -211,7 +211,6 @@ function renderHome() {
 // ---------------- クイズ ----------------
 // 出題に使う手順(設定で選んだ枠。自分の手順がなければ初期手順)
 const SLOT_NAMES = { two: '両手', oh: '片手' };
-const BACK_VIEW = [28, 145];
 const algFor = (c, slot) => S.customAlg(c.name, slot) || c.alg;
 const algOf = (c) => algFor(c, S.get().settings.algSlot);
 
@@ -281,16 +280,6 @@ function buildQuizView() {
     if (v === 'reset') quiz.view.setView(...DRILLS.cmll.view, true);
   };
   sceneEl.appendChild(tools);
-  // 裏側(B・L・D 面)を見せる小さいキューブ。SB の問題でだけ表示する
-  const mini = document.createElement('div');
-  mini.className = 'mini';
-  mini.hidden = true;
-  sceneEl.appendChild(mini);
-  quiz.mini = new CubeView(mini, { scale: 0.66 });
-  quiz.mini.setScheme(s.up, s.front);
-  quiz.mini.setView(...BACK_VIEW);
-  mini.insertAdjacentHTML('beforeend', '<span class="mini-label">裏側</span>');
-  mini.addEventListener('pointerdown', (e) => e.stopPropagation());
   const afterLabel = document.createElement('div');
   afterLabel.id = 'afterlabel';
   afterLabel.className = 'after-label';
@@ -363,11 +352,8 @@ function nextProblem() {
   aufRow.innerHTML = rowOpts.map(([v, label]) => `<button class="aufbtn" data-auf="${esc(v)}">${esc(label)}</button>`).join('');
   quiz.view.setColors(p.colors, p.highlight || null);
   quiz.view.setView(...DRILLS.cmll.view, quiz.idx > 0);
-  quiz.mini.host.hidden = !p.highlight;
-  app.querySelector('#scene').classList.toggle('with-mini', !!p.highlight);
   aufRow.classList.toggle('two', rowOpts.length === 2);
   app.querySelector('#choices').classList.toggle('nums', !!p.highlight);
-  if (p.highlight) { quiz.mini.setColors(p.colors, p.highlight); quiz.mini.setView(...BACK_VIEW); }
   app.querySelector('#prompt').textContent = p.prompt;
   quiz.selEdges = [];
   const afterLabel = app.querySelector('#afterlabel');
@@ -380,7 +366,8 @@ function nextProblem() {
     app.querySelector('#choices').innerHTML = p.choices.map((c, i) =>
       `<button class="choice" data-i="${i}"><span>${esc(c.label)}</span><small>${esc(c.sub || '')}</small></button>`).join('');
   }
-  app.querySelector('#feedback').innerHTML = '';
+  app.querySelector('#feedback').innerHTML = p.sbSols ? '<button class="btn" id="reveal">答えを見る<small>不正解として記録されます</small></button>' : '';
+  if (p.sbSols) app.querySelector('#reveal').onclick = reveal;
   const qc = app.querySelector('#qcount');
   qc.textContent = quiz.total ? `${quiz.idx + 1} / ${quiz.total}` : `${quiz.idx + 1}問目 ・ 正解 ${quiz.correct}`;
   const prog = app.querySelector('#qprog');
@@ -451,15 +438,44 @@ function settle(ok, rect, wrongMsg) {
     return;
   }
   const fb = app.querySelector('#feedback');
+  // SB は答えを覚えるのが目的なので、正解しても次へを押すまで答えを出しておく
+  const autoNext = ok && S.get().settings.autoNext && !p.sbSols;
   fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : wrongMsg}</div>
-    <div class="sub mono">${esc(p.explain)}</div></div>
-    ${ok && S.get().settings.autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
+    ${p.sbSols ? '' : `<div class="sub mono">${esc(p.explain)}</div>`}</div>
+    ${autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
+    ${p.sbSols ? sbTable(p) : ''}
     <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(p.scramble)}</div></details>`;
-  if (ok && S.get().settings.autoNext) {
+  if (autoNext) {
     setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, p.eoAnswers ? 1600 : 800);
   } else {
     fb.querySelector('#next').onclick = nextProblem;
   }
+}
+
+// SB の解答例: square ごとに短い順。最短の行を強調し、手を種類ごとに色分けする
+const MOVE_CLASS = { R: 'mv-R', r: 'mv-r', U: 'mv-U', M: 'mv-M' };
+function sbTable(p) {
+  const best = Math.min(...Object.values(p.sbSols).map((l) => l[0].split(' ').length));
+  const rows = Object.entries(p.sbSols).map(([k, list]) => list.map((alg, i) => {
+    const moves = alg.split(' ');
+    const top = moves.length === best;
+    return `<tr class="${top ? 'best' : ''}">${i ? '' : `<th rowspan="${list.length}" class="sq">${k === 'front' ? 'Front' : 'Back'}<small>square</small></th>`}
+      <td class="n">${top ? '★' : ''}${moves.length}手</td>
+      <td class="alg">${moves.map((m) => `<span class="mv ${MOVE_CLASS[m[0]]}">${esc(m)}</span>`).join('')}</td></tr>`;
+  }).join('')).join('');
+  return `<table class="soltab">${rows}</table>
+    <div class="sub legend"><span class="mv mv-R">R</span><span class="mv mv-r">r</span><span class="mv mv-U">U</span><span class="mv mv-M">M</span> ★=最短</div>`;
+}
+
+// 答えを見る: 正解を表示して不正解として記録する
+function reveal() {
+  if (!quiz || quiz.answered) return;
+  quiz.answered = true;
+  const p = quiz.current;
+  app.querySelectorAll('.picked').forEach((x) => x.classList.remove('picked'));
+  app.querySelectorAll('.choice').forEach((b, k) => b.classList.add(k === p.answer ? 'correct' : 'dim'));
+  app.querySelectorAll('.aufbtn').forEach((x) => x.classList.add((p.aufAnswers || []).includes(x.dataset.auf) ? 'correct' : 'dim'));
+  settle(false, app.querySelector('#reveal').getBoundingClientRect(), '答え');
 }
 
 // CMLL→EO: 選んだエッジの集合が過不足なく一致したら正解

@@ -371,10 +371,35 @@ export const SQUARES = {
   back: { name: 'Back square', pieces: ['DR', 'DRB', 'BR'] },
 };
 const SB_PIECE_STICKERS = new Set(C.piecesStickers(C.SB_PIECES));
-const CENTERS = [4, 13, 22, 31, 40, 49];
+const SQ_STICKERS = {};
+for (const [k, v] of Object.entries(SQUARES)) SQ_STICKERS[k] = C.piecesStickers(v.pieces);
 const sqSolvers = {};
 // ピース 3 個の表を丸ごと作るので、表の値がそのまま最短手数になる
 const getSq = (k) => (sqSolvers[k] ||= new BlockSolver(SQUARES[k].pieces, SB_MOVES, [[0, 1, 2]]));
+
+// R r M が続く部分を、R 層と M 層の回転量にまとめる。もっと少ない手数で書ける並びは無駄なので除く
+const X_TURNS = { R: [1, 0], r: [1, 3], M: [0, 1] };
+function tightXBlocks(moves) {
+  for (let i = 0; i < moves.length;) {
+    let j = i, a = 0, b = 0;
+    while (j < moves.length && X_TURNS[C.MOVES[moves[j]].base]) {
+      const [ra, mb] = X_TURNS[C.MOVES[moves[j]].base];
+      const n = moves[j].endsWith('2') ? 2 : moves[j].endsWith("'") ? 3 : 1;
+      a = (a + ra * n) % 4; b = (b + mb * n) % 4;
+      j++;
+    }
+    const need = !a && !b ? 0 : !a || !b || (a + b) % 4 === 0 ? 1 : 2;
+    if (j - i > need) return false;
+    i = Math.max(j, i + 1);
+  }
+  return true;
+}
+// U と R/r/M の切り替わり位置(各まとまりの終わり)
+function blocksOf(moves) {
+  const out = [];
+  for (let i = 1; i <= moves.length; i++) if (i === moves.length || C.MOVES[moves[i]].axis !== C.MOVES[moves[i - 1]].axis) out.push(i);
+  return out;
+}
 
 function genSbSquare() {
   for (let attempt = 0; attempt < 200; attempt++) {
@@ -384,26 +409,35 @@ function genSbSquare() {
     scramble.push(...parse(fix));
     const tracked = trackedApply(trackedSolved(), scramble);
     const res = Object.keys(SQUARES).map((k) => {
-      // 最後の r と R は square には同じなので、それだけ違う解はまとめる
+      const done = (moves) => C.isSolvedAt(colorsOf(trackedApply(tracked, moves)), SQ_STICKERS[k]);
+      // 短い順に 3 つ。無駄な手を含む解(途中で揃う・1 手抜いても揃う)と、
+      // 最後の r と R だけが違う解(square には同じ)は除く
       const seen = new Set();
-      const sol = getSq(k).solve(tracked, { maxSolutions: 8 }).filter((x) => {
-        const key = x.map((m, i) => (i === x.length - 1 ? m.replace('r', 'R') : m)).join(' ');
-        return !seen.has(key) && seen.add(key);
-      });
-      return { k, len: sol[0].length, sols: sol };
+      const sols = getSq(k).solve(tracked, { maxSolutions: 400, extra: 3 }).filter((x) => {
+        if (!tightXBlocks(x)) return false;
+        // square のピースの動きが同じ解(r と R の違いだけなど)は 1 つにまとめる
+        const key = blocksOf(x).map((b) => { const t = trackedApply(tracked, x.slice(0, b)); return SQ_STICKERS[k].map((i) => t.indexOf(i)).join(','); }).join('|');
+        if (seen.has(key)) return false;
+        seen.add(key);
+        for (let i = 1; i < x.length; i++) if (done(x.slice(0, i))) return false;
+        for (let i = 0; i < x.length; i++) if (done([...x.slice(0, i), ...x.slice(i + 1)])) return false;
+        return true;
+      }).sort((p, q) => p.length - q.length).slice(0, 3);
+      return { k, len: sols[0].length, sols };
     });
     const best = Math.min(...res.map((r) => r.len));
-    if (best < 1) continue;
+    if (best < 2) continue;
     const squares = res.filter((r) => r.len === best).map((r) => r.k);
     // 選択肢: 正解の前後の手数から 4 つ(小さい順)
     const lo = Math.max(1, best - Math.floor(Math.random() * 4));
     const nums = [lo, lo + 1, lo + 2, lo + 3];
     const choices = nums.map((n) => ({ label: `${n}手` }));
-    const fmt = (r) => `${SQUARES[r.k].name} ${r.len}手 (${r.sols.map((x) => x.join(' ')).slice(0, 2).join(' / ')})`;
+    const fmt = (r) => `${SQUARES[r.k].name} ${r.len}手 (${r.sols[0].join(' ')})`;
     return {
       drill: 'sbSq',
       colors: colorsOf(tracked),
-      highlight: tracked.map((orig, pos) => (SB_PIECE_STICKERS.has(orig) || CENTERS.includes(pos) ? 1 : 0)).join(''),
+      highlight: tracked.map((orig) => (SB_PIECE_STICKERS.has(orig) ? 1 : 0)).join(''),
+      sbSols: Object.fromEntries(res.map((r) => [r.k, r.sols.map((x) => x.join(' '))])),
       scramble: scramble.join(' '),
       prompt: 'squareを作る最短手数は? Front / Back はどっち?',
       choices,

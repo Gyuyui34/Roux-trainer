@@ -81,13 +81,16 @@ export class CubeView {
     if (this.colors) this.setColors(this.colors, this.highlight);
   }
 
-  // highlight: 54 文字の '0'/'1'。'0' のステッカーは暗く表示する
+  // highlight: 54 文字の '0'/'1'。'1' のステッカーだけ色を付ける
   setColors(colors, highlight = null) {
     this.colors = colors;
     this.highlight = highlight;
+    // 強調表示のときは、それ以外を同じ灰色の半透明にして裏側のステッカーを透かして見せる
+    this.cube.classList.toggle('xray', !!highlight);
     colors.forEach((c, i) => {
-      this.stickerEls[i].style.background = COLOR_HEX[this.scheme[c]];
-      this.stickerEls[i].classList.toggle('dim', !!highlight && highlight[i] === '0');
+      const ghost = !!highlight && highlight[i] === '0';
+      this.stickerEls[i].style.background = ghost ? '' : COLOR_HEX[this.scheme[c]];
+      this.stickerEls[i].classList.toggle('ghost', ghost);
     });
   }
 
