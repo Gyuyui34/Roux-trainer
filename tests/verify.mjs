@@ -1,6 +1,6 @@
 // node tests/verify.mjs : 手順表と出題生成の検証
 import * as C from '../js/cube.js';
-import { CMLL_CASES, generate, _internal, badEdges } from '../js/drills.js';
+import { CMLL_CASES, generate, _internal, badEdges, SQUARES } from '../js/drills.js';
 
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('NG:', msg); } };
@@ -80,6 +80,28 @@ for (let i = 0; i < 100; i++) {
   // センターが揃っている(または M2 ずれ)ときは U で揃っていないエッジの数は変わらない
   if (s[4] === 0 || s[4] === 3) check(badEdges(C.applyAlg(s, ['U'])).length === before, 'U keeps bad count');
   check(_internal.eoDone(s) === (before === 0), 'eoDone matches badEdges');
+}
+// SB square: 示した手順で square が揃う / FB は揃ったまま / 手数より短い解がない
+const SB_SET = C.expandMoveSet(['U', 'R', 'r', 'M']);
+const sqDone = (st, k) => C.isSolvedAt(st, C.piecesStickers(SQUARES[k].pieces));
+const anyShorter = (st, k, depth) => {
+  if (sqDone(st, k)) return true;
+  if (!depth) return false;
+  return SB_SET.some((m) => anyShorter(C.applyAlg(st, [m]), k, depth - 1));
+};
+for (let i = 0; i < 60; i++) {
+  const p = generate('sbSq');
+  check(C.isSolvedAt(p.colors, C.FB_STICKERS), 'sbSq FB solved');
+  check(p.colors[4] === 0, 'sbSq centers aligned');
+  const best = Number(p.caseKey.replace('手', ''));
+  check(p.choices[p.answer].label === p.caseKey, 'sbSq answer label');
+  for (const k of Object.keys(SQUARES)) {
+    const m = p.explain.match(new RegExp(`${SQUARES[k].name} (\\d+)手 \\(([^/)]+)`));
+    const len = Number(m[1]);
+    check(sqDone(C.applyAlg(p.colors, m[2].trim()), k), `sbSq ${k} solution works`);
+    check(len >= best && p.aufAnswers.includes(k) === (len === best), `sbSq ${k} answer set`);
+    if (len <= 4) check(!anyShorter(p.colors, k, len - 1), `sbSq ${k} optimal`);
+  }
 }
 console.log('cmllEo bad-edge counts', JSON.stringify(dist));
 console.log(fail ? `${fail} failures` : 'all passed');

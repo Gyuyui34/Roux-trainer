@@ -38,8 +38,9 @@ export function schemeFor(up, front) {
 }
 
 export class CubeView {
-  constructor(host) {
+  constructor(host, { scale = 0.48 } = {}) {
     this.host = host;
+    this.scale = scale;
     this.yaw = -35;
     this.pitch = -28;
     this.scheme = schemeFor('yellow', 'green');
@@ -67,7 +68,7 @@ export class CubeView {
   }
 
   layout() {
-    const size = Math.min(this.host.clientWidth, this.host.clientHeight) * 0.48;
+    const size = Math.min(this.host.clientWidth, this.host.clientHeight) * this.scale;
     this.cube.style.width = this.cube.style.height = `${size}px`;
     C.FACES.forEach((face) => {
       this[`face${face}`].style.transform = `${FACE_TRANSFORM[face]} translateZ(${size / 2}px)`;
@@ -77,12 +78,17 @@ export class CubeView {
 
   setScheme(up, front) {
     this.scheme = schemeFor(up, front);
-    if (this.colors) this.setColors(this.colors);
+    if (this.colors) this.setColors(this.colors, this.highlight);
   }
 
-  setColors(colors) {
+  // highlight: 54 文字の '0'/'1'。'0' のステッカーは暗く表示する
+  setColors(colors, highlight = null) {
     this.colors = colors;
-    colors.forEach((c, i) => { this.stickerEls[i].style.background = COLOR_HEX[this.scheme[c]]; });
+    this.highlight = highlight;
+    colors.forEach((c, i) => {
+      this.stickerEls[i].style.background = COLOR_HEX[this.scheme[c]];
+      this.stickerEls[i].classList.toggle('dim', !!highlight && highlight[i] === '0');
+    });
   }
 
   setView(pitch, yaw, animate = false) {

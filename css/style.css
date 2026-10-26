@@ -96,6 +96,14 @@ h2 { font-size: 16px; margin: 20px 0 8px; color: var(--sub); font-weight: 600; }
 .face { position: absolute; inset: 0; background: #0b0b0d; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4%; padding: 4%; border-radius: 6%;
   backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .sticker { border-radius: 14%; }
+.sticker.dim { filter: brightness(.28) saturate(.35); }
+.scene.with-mini { padding-left: 34%; }
+.scene .mini { position: absolute; left: 0; top: 8%; width: 34%; height: 70%; padding: 0; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid var(--line); }
+.aufrow.two { grid-template-columns: repeat(2, 1fr); }
+.aufrow.two .aufbtn { font: 800 15px -apple-system, sans-serif; }
+.choices.nums { grid-template-columns: repeat(4, 1fr); }
+.choices.nums .choice { justify-content: center; text-align: center; padding: 14px 0; font-size: 18px; font-weight: 800; }
+.scene .mini-label { position: absolute; left: 6px; top: 4px; font-size: 11px; color: var(--sub); pointer-events: none; }
 .view-tools { position: absolute; right: 0; bottom: 4px; display: flex; gap: 6px; }
 .view-tools button { font-size: 12px; padding: 6px 10px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); color: var(--sub); }
 .prompt { font-weight: 700; margin: 4px 0 10px; font-size: 15px; }

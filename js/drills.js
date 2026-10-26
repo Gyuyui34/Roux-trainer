@@ -364,6 +364,60 @@ function genCmllEo(opts) {
   };
 }
 
+// ---------- SB の square ----------
+// square = DR エッジ + コーナー 1 個 + エッジ 1 個(2×2×1)。front / back の 2 通り
+export const SQUARES = {
+  front: { name: 'Front square', pieces: ['DR', 'DRF', 'FR'] },
+  back: { name: 'Back square', pieces: ['DR', 'DRB', 'BR'] },
+};
+const SB_PIECE_STICKERS = new Set(C.piecesStickers(C.SB_PIECES));
+const CENTERS = [4, 13, 22, 31, 40, 49];
+const sqSolvers = {};
+// ピース 3 個の表を丸ごと作るので、表の値がそのまま最短手数になる
+const getSq = (k) => (sqSolvers[k] ||= new BlockSolver(SQUARES[k].pieces, SB_MOVES, [[0, 1, 2]]));
+
+function genSbSquare() {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const scramble = C.randomMoves(SB_MOVES, 30);
+    // M 列でセンターを揃える(SB のピースには影響しない)
+    const fix = ['', 'M', 'M2', "M'"].find((m) => C.applyAlg(C.solved(), [...scramble, ...parse(m)])[4] === 0);
+    scramble.push(...parse(fix));
+    const tracked = trackedApply(trackedSolved(), scramble);
+    const res = Object.keys(SQUARES).map((k) => {
+      // 最後の r と R は square には同じなので、それだけ違う解はまとめる
+      const seen = new Set();
+      const sol = getSq(k).solve(tracked, { maxSolutions: 8 }).filter((x) => {
+        const key = x.map((m, i) => (i === x.length - 1 ? m.replace('r', 'R') : m)).join(' ');
+        return !seen.has(key) && seen.add(key);
+      });
+      return { k, len: sol[0].length, sols: sol };
+    });
+    const best = Math.min(...res.map((r) => r.len));
+    if (best < 1) continue;
+    const squares = res.filter((r) => r.len === best).map((r) => r.k);
+    // 選択肢: 正解の前後の手数から 4 つ(小さい順)
+    const lo = Math.max(1, best - Math.floor(Math.random() * 4));
+    const nums = [lo, lo + 1, lo + 2, lo + 3];
+    const choices = nums.map((n) => ({ label: `${n}手` }));
+    const fmt = (r) => `${SQUARES[r.k].name} ${r.len}手 (${r.sols.map((x) => x.join(' ')).slice(0, 2).join(' / ')})`;
+    return {
+      drill: 'sbSq',
+      colors: colorsOf(tracked),
+      highlight: tracked.map((orig, pos) => (SB_PIECE_STICKERS.has(orig) || CENTERS.includes(pos) ? 1 : 0)).join(''),
+      scramble: scramble.join(' '),
+      prompt: 'squareを作る最短手数は? Front / Back はどっち?',
+      choices,
+      answer: nums.indexOf(best),
+      rowOpts: Object.entries(SQUARES).map(([k, v]) => [k, v.name]),
+      rowName: 'square',
+      aufAnswers: squares,
+      caseKey: `${best}手`,
+      explain: `最短 ${best}手(${squares.map((k) => SQUARES[k].name).join(' / ')})。${res.map(fmt).join('、')}`,
+    };
+  }
+  throw new Error('問題を生成できませんでした');
+}
+
 export const ENABLED_DRILLS = ['cmll'];
 
 export const DRILLS = {
@@ -373,6 +427,7 @@ export const DRILLS = {
   cmllEo: { name: 'CMLL→EO', full: 'CMLL後のEO', gen: (o) => genCmllEo({ ...o, auf: 'none' }), view: [-35, -30] },
   cmllEoAuf: { name: 'CMLL→EO+AUF', full: 'CMLL後のEO(AUFランダム)', gen: (o) => genCmllEo({ ...o, auf: 'random' }), view: [-35, -30] },
   cmllAuf: { name: 'CMLL+AUF', full: 'CMLL(AUFランダム)', gen: (o) => genCmll({ ...o, auf: 'random' }), view: [-35, -30] },
+  sbSq: { name: 'SB square', full: 'SBのsquare', gen: genSbSquare, view: [-28, -35], noSlot: true },
   eo: { name: 'EO', full: 'LSE EO', gen: genEo, view: [-40, -20], ranges: [[1, 4], [5, 6], [7, 20]] },
 };
 
