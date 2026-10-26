@@ -37,7 +37,10 @@ const accColor = (p) => (p >= 90 ? 'var(--ok)' : p >= 70 ? 'var(--accent)' : 'va
 
 // 練習設定(前回の設定を引き継ぐ)
 function practiceCfg() {
-  return { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
+  const cfg = { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
+  // 以前の設定で上限と下限が近すぎる場合は広げる
+  if (cfg.sbMax - cfg.sbMin < 3) { cfg.sbMin = Math.min(cfg.sbMin, 6); cfg.sbMax = cfg.sbMin + 3; }
+  return cfg;
 }
 
 // ---------------- 共通 ----------------
@@ -161,8 +164,8 @@ function renderHome() {
       <div class="opt"><span class="sub">練習メニュー</span>
         <div class="chips" id="menu">${Object.entries(MENU_LABEL).map(([k, v]) => `<button class="chip ${cfg.menu === k ? 'on' : ''}" data-menu="${k}">${v}</button>`).join('')}</div></div>
       ${isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
-        <div class="row" style="gap:6px"><select id="sbmin">${SB_LENS.map((n) => `<option value="${n}" ${n === sbMin ? 'selected' : ''}>${n}手</option>`).join('')}</select>
-        <span class="sub">〜</span><select id="sbmax">${SB_LENS.map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
+        <div class="row" style="gap:6px"><select id="sbmin">${SB_LENS.slice(0, -SB_GAP).map((n) => `<option value="${n}" ${n === sbMin ? 'selected' : ''}>${n}手</option>`).join('')}</select>
+        <span class="sub">〜</span><select id="sbmax">${SB_LENS.slice(SB_GAP).map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
       <div class="sub">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。手数は R r U M を1手(180°も1手)で数えます。同じ手数なら両方正解です。</div>` : `
       <div class="opt"><span class="sub">問題の種類</span>
         <div class="chips" id="kind">${Object.entries(KIND_LABEL).map(([k, v]) => `<button class="chip ${cfg.kind === k ? 'on' : ''}" data-kind="${k}">${v}</button>`).join('')}</div></div>
@@ -194,9 +197,9 @@ function renderHome() {
   app.querySelector('#go-review').onclick = () => startQuiz('review');
   app.querySelector('#testn').onclick = (e) => { const b = e.target.closest('[data-n]'); if (b) update({ testN: Number(b.dataset.n) }); };
   if (isSb) {
-    // 下限と上限が逆にならないよう、片方を動かしたらもう片方も合わせる
-    app.querySelector('#sbmin').onchange = (e) => { const v = Number(e.target.value); update({ sbMin: v, sbMax: Math.max(v, sbMax) }); };
-    app.querySelector('#sbmax').onchange = (e) => { const v = Number(e.target.value); update({ sbMax: v, sbMin: Math.min(v, sbMin) }); };
+    // 上限と下限は 3 手以上離す(選択肢の 4 つが範囲に収まるように)。片方を動かしたらもう片方も合わせる
+    app.querySelector('#sbmin').onchange = (e) => { const v = Number(e.target.value); update({ sbMin: v, sbMax: Math.max(v + SB_GAP, sbMax) }); };
+    app.querySelector('#sbmax').onchange = (e) => { const v = Number(e.target.value); update({ sbMax: v, sbMin: Math.min(v - SB_GAP, sbMin) }); };
     return;
   }
   app.querySelector('#sets').onclick = (e) => {
@@ -221,6 +224,7 @@ function renderHome() {
 // 出題に使う手順(設定で選んだ枠。自分の手順がなければ初期手順)
 const SLOT_NAMES = { two: '両手', oh: '片手' };
 const SB_LENS = [2, 3, 4, 5, 6, 7, 8, 9];
+const SB_GAP = 3;
 const algFor = (c, slot) => S.customAlg(c.name, slot) || c.alg;
 const algOf = (c) => algFor(c, S.get().settings.algSlot);
 

@@ -81,6 +81,14 @@ for (let i = 0; i < 100; i++) {
   if (s[4] === 0 || s[4] === 3) check(badEdges(C.applyAlg(s, ['U'])).length === before, 'U keeps bad count');
   check(_internal.eoDone(s) === (before === 0), 'eoDone matches badEdges');
 }
+// SB square: 手数の範囲を指定したら、正解も選択肢も範囲内
+for (const [a, b] of [[2, 5], [3, 6], [6, 9], [2, 9], [4, 8]]) {
+  for (let i = 0; i < 15; i++) {
+    const p = generate('sbSq', { minLen: a, maxLen: b });
+    const nums = p.choices.map((c) => Number(c.label.replace('手', '')));
+    check(nums.every((n) => n >= a && n <= b) && nums.includes(Number(p.caseKey.replace('手', ''))), `sbSq range ${a}-${b}: ${nums} ${p.caseKey}`);
+  }
+}
 // SB square: 示した手順で square が揃う / FB は揃ったまま / 手数より短い解がない
 const SB_SET = C.expandMoveSet(['U', 'R', 'r', 'M']);
 const sqDone = (st, k) => C.isSolvedAt(st, C.piecesStickers(SQUARES[k].pieces));

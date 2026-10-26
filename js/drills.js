@@ -434,7 +434,9 @@ function genSbSquare(opts = {}) {
     if (best < 2) continue;
     const squares = res.filter((r) => r.len === best).map((r) => r.k);
     // 選択肢: 正解の前後の手数から 4 つ(小さい順)
-    const lo = Math.max(1, best - Math.floor(Math.random() * 4));
+    // 選択肢の 4 つも出題範囲(下限〜上限)に収める
+    const hiCap = Math.max(minLen, (opts.maxLen || best + 3) - 3);
+    const lo = Math.min(Math.max(minLen, best - Math.floor(Math.random() * 4)), hiCap, best);
     const nums = [lo, lo + 1, lo + 2, lo + 3];
     const choices = nums.map((n) => ({ label: `${n}手` }));
     const fmt = (r) => `${SQUARES[r.k].name} ${r.len}手 (${r.sols[0].join(' ')})`;
