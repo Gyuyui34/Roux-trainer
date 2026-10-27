@@ -1,6 +1,6 @@
 // node tests/verify.mjs : 手順表と出題生成の検証
 import * as C from '../js/cube.js';
-import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves } from '../js/drills.js';
+import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS } from '../js/drills.js';
 
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('NG:', msg); } };
@@ -102,6 +102,16 @@ for (const side of ['front', 'back']) {
     }
     check(!solvesSquare(p.colors, side, []), 'sbSolve unsolved at start');
     check(p.highlight.split('').filter((x) => x === '1').length === 7, 'sbSolve highlights only the 3 square pieces');
+  }
+}
+// SB 手順入力(DR エッジの位置で指定): DR エッジが指定した位置にあり、示した最短手順で揃う
+for (const pos of DR_POSITIONS) {
+  for (const side of ['front', 'back']) {
+    const p = generate('sbSolve', { side, drPos: [pos] });
+    const at = C.applyAlg(C.solved(), p.scramble);
+    const piece = C.piecesStickers([pos]);
+    check(p.drPos === pos && piece.some((i) => at[i] === 3) && piece.some((i) => at[i] === 1), `sbSolve DR@${pos} ${side}`);
+    check(p.optLen >= 2 && p.sbSols[side][0].split(' ').length === p.optLen && solvesSquare(p.colors, side, p.sbSols[side][0]), `sbSolve DR@${pos} ${side} solution`);
   }
 }
 // SB square: 示した手順で square が揃う / FB は揃ったまま / 手数より短い解がない

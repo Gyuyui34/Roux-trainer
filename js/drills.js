@@ -498,12 +498,21 @@ function genSbSquare(opts = {}) {
 }
 
 // 指定した square を指定した手数で作る問題。手順をボタンで入力して答える
+// DR エッジが今いる場所(UF, DB など)。向きは問わない
+export const DR_POSITIONS = ['UF', 'UB', 'UL', 'UR', 'DF', 'DB', 'FR', 'BR', 'DR'];
+const DR_STICKER = C.stickerAt('DR');
+const POS_OF_STICKER = new Map(DR_POSITIONS.flatMap((n) => C.piecesStickers([n]).map((i) => [i, n])));
+const drPosition = (tracked) => POS_OF_STICKER.get(tracked.indexOf(DR_STICKER));
+
+// opts.len: 最短手数を指定 / opts.drPos: DR エッジの位置(複数可)を指定。手数は 2 手以上でランダム
 function genSbSolve(opts = {}) {
   const k = SQUARES[opts.side] ? opts.side : 'front';
-  const len = opts.len || 5;
+  const byDr = Array.isArray(opts.drPos) && opts.drPos.length;
   for (let attempt = 0; attempt < 40000; attempt++) {
     const { scramble, tracked } = sbScramble();
-    if (sqDist(tracked, k) !== len) continue;
+    const len = sqDist(tracked, k);
+    const pos = drPosition(tracked);
+    if (byDr ? !opts.drPos.includes(pos) || len < 2 : len !== (opts.len || 5)) continue;
     const r = sqSolutions(tracked, k);
     return {
       drill: 'sbSolve',
@@ -515,8 +524,9 @@ function genSbSolve(opts = {}) {
       inputPad: true,
       scramble: scramble.join(' '),
       prompt: `${SQUARES[k].name}を${len}手で作る手順を入力`,
-      caseKey: `${k} ${len}手`,
-      explain: `${SQUARES[k].name} ${len}手 (${r.sols[0].join(' ')})`,
+      drPos: pos,
+      caseKey: byDr ? `${k} DR@${pos}` : `${k} ${len}手`,
+      explain: `${SQUARES[k].name} ${len}手 DRエッジ:${pos} (${r.sols[0].join(' ')})`,
     };
   }
   throw new Error('問題を生成できませんでした');
