@@ -171,7 +171,7 @@ function renderHome() {
         <select id="sblen">${SB_LENS.map((n) => `<option value="${n}" ${n === cfg.sbLen ? 'selected' : ''}>${n}手</option>`).join('')}</select></div>
       <div class="opt"><span class="sub">square</span>
         <div class="chips" id="sbside">${Object.entries(SQ_LABEL).map(([k, v]) => `<button class="chip ${cfg.sbSide === k ? 'on' : ''}" data-side="${k}">${v}</button>`).join('')}</div></div>
-      <div class="sub">FBだけ揃った状態から、選んだsquareを最短${cfg.sbLen}手で作れる問題を出します。R R' r r' M' M U U' のボタンを順に押して手順を入力し、squareが揃えば正解です。</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
+      <div class="sub">FBだけ揃った状態から、選んだsquareを最短${cfg.sbLen}手で作れる問題を出します。R R' r r' M' M U U' のボタンを順に押して手順を入力し、squareが最短手数で揃えば正解です(揃っても手数が多いと不正解)。</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
         <div class="row" style="gap:6px"><select id="sbmin">${SB_LENS.slice(0, -SB_GAP).map((n) => `<option value="${n}" ${n === sbMin ? 'selected' : ''}>${n}手</option>`).join('')}</select>
         <span class="sub">〜</span><select id="sbmax">${SB_LENS.slice(SB_GAP).map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
       <div class="sub">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。手数は R r U M を1手(180°も1手)で数えます。同じ手数なら両方正解です。</div>` : `
@@ -536,10 +536,12 @@ function answerSeq(btn) {
   const p = quiz.current;
   if (!quiz.seq.length) { toast('手順を入力してください'); return; }
   quiz.answered = true;
-  const ok = solvesSquare(p.colors, p.square, quiz.seq);
+  // 揃っていても、まとめた手数が最短手数より多ければ不正解
+  const solved = solvesSquare(p.colors, p.square, quiz.seq);
+  const ok = solved && mergeMoves(quiz.seq).length <= p.optLen;
   app.querySelector('#seq').classList.add(ok ? 'correct' : 'wrong');
   hidePad();
-  settle(ok, btn.getBoundingClientRect(), 'squareが揃いません');
+  settle(ok, btn.getBoundingClientRect(), solved ? `揃いましたが最短(${p.optLen}手)ではありません` : 'squareが揃いません');
 }
 
 // 答えを見る: 正解を表示して不正解として記録する
