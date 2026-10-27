@@ -27,7 +27,8 @@ const baseDrill = (k) => k.replace(/Oh$/, '');
 const drillName = (k) => (DRILLS[baseDrill(k)].noSlot ? DRILLS[k].name : `${DRILLS[baseDrill(k)].name}・${k.endsWith('Oh') ? '片手' : '両手'}`);
 const MENU_LABEL = { cmll: 'CMLL', sb: 'SB 手数当て', sbSolve: 'SB 手順入力' };
 const SQ_LABEL = { front: 'Front square', back: 'Back square' };
-const PAD_MOVES = ['R', "R'", 'r', "r'", "M'", 'M', 'U', "U'"];
+// 並び: U' | U | r / r' | R / R' (U' と U は縦 2 段分)
+const PAD_MOVES = ["U'", 'U', 'r', 'R', "r'", "R'"];
 const KIND_LABEL = { alg: '手順を当てる', eo: 'CMLL後のEO' };
 const AUF_LABEL = { none: 'AUFなし', random: 'AUFランダム' };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -171,7 +172,7 @@ function renderHome() {
         <select id="sblen">${SB_LENS.map((n) => `<option value="${n}" ${n === cfg.sbLen ? 'selected' : ''}>${n}手</option>`).join('')}</select></div>
       <div class="opt"><span class="sub">square</span>
         <div class="chips" id="sbside">${Object.entries(SQ_LABEL).map(([k, v]) => `<button class="chip ${cfg.sbSide === k ? 'on' : ''}" data-side="${k}">${v}</button>`).join('')}</div></div>
-      <div class="sub">FBだけ揃った状態から、選んだsquareを最短${cfg.sbLen}手で作れる問題を出します。R R' r r' M' M U U' のボタンを順に押して手順を入力し、squareが最短手数で揃えば正解です(揃っても手数が多いと不正解)。</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
+      <div class="sub">FBだけ揃った状態から、選んだsquareを最短${cfg.sbLen}手で作れる問題を出します。U' U r r' R R' のボタンを順に押して手順を入力し(R r' は M、R' r は M' に自動変換)、squareが最短手数で揃えば正解です(揃っても手数が多いと不正解)。</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
         <div class="row" style="gap:6px"><select id="sbmin">${SB_LENS.slice(0, -SB_GAP).map((n) => `<option value="${n}" ${n === sbMin ? 'selected' : ''}>${n}手</option>`).join('')}</select>
         <span class="sub">〜</span><select id="sbmax">${SB_LENS.slice(SB_GAP).map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
       <div class="sub">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。手数は R r U M を1手(180°も1手)で数えます。同じ手数なら両方正解です。</div>` : `
@@ -402,7 +403,7 @@ function nextProblem() {
   quiz.seq = [];
   if (p.inputPad) {
     app.querySelector('#choices').innerHTML = `<div class="seq" id="seq"></div>
-      <div class="pad">${PAD_MOVES.map((m) => `<button class="padbtn" data-mv="${esc(m)}">${esc(m)}</button>`).join('')}</div>
+      <div class="pad">${PAD_MOVES.map((m) => `<button class="padbtn${m[0] === 'U' ? ' tall' : ''}" data-mv="${esc(m)}">${esc(m)}</button>`).join('')}</div>
       <div class="padrow"><button class="padbtn sm" id="padback">⌫ 1手戻す</button><button class="padbtn sm" id="padclear">クリア</button><button class="padbtn sm ok" id="padok">決定</button></div>`;
     showSeq();
   } else if (p.eoAnswers) {

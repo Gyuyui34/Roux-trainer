@@ -437,19 +437,26 @@ export function solvesSquare(colors, k, moves) {
   return C.isSolvedAt(C.applyAlg(colors, moves), SQ_STICKERS[k]);
 }
 
-// 同じ層の手が続いたらまとめる(R R → R2、R R' → なし)。手数はまとめた後で数える
+// 続けて押した手をまとめる。手数はまとめた後で数える
+// ・同じ層: R R → R2、R R' → なし
+// ・R と r' (順不同) → M、R' と r (順不同) → M'
+const TO_M = { "R r'": 'M', "r' R": 'M', "R' r": "M'", "r R'": "M'" };
 export function mergeMoves(moves) {
   const out = [];
-  for (const m of moves) {
-    const n = (x) => (x.endsWith('2') ? 2 : x.endsWith("'") ? 3 : 1);
+  const n = (x) => (x.endsWith('2') ? 2 : x.endsWith("'") ? 3 : 1);
+  const push = (m) => {
     const last = out[out.length - 1];
+    if (last && TO_M[`${last} ${m}`]) { out.pop(); push(TO_M[`${last} ${m}`]); return; }
     if (last && C.MOVES[last].base === C.MOVES[m].base) {
       out.pop();
       const t = (n(last) + n(m)) % 4;
       const b = C.MOVES[m].base;
-      if (t) out.push(t === 1 ? b : t === 2 ? `${b}2` : `${b}'`);
-    } else out.push(m);
-  }
+      if (t) push(t === 1 ? b : t === 2 ? `${b}2` : `${b}'`);
+      return;
+    }
+    out.push(m);
+  };
+  moves.forEach(push);
   return out;
 }
 
