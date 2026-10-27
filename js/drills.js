@@ -503,6 +503,15 @@ export const DR_POSITIONS = ['UF', 'UB', 'UL', 'UR', 'DF', 'DB', 'FR', 'BR', 'DR
 const DR_STICKER = C.stickerAt('DR');
 const POS_OF_STICKER = new Map(DR_POSITIONS.flatMap((n) => C.piecesStickers([n]).map((i) => [i, n])));
 const drPosition = (tracked) => POS_OF_STICKER.get(tracked.indexOf(DR_STICKER));
+// DR エッジの向き: D 色のステッカーが U/D 面を向く('ud')か、側面を向く('side')か。
+// U/D 面に触れない FR・BR では、R 面を向くとき 'ud'、F/B 面を向くとき 'side'
+export const DR_ORIS = { ud: 'D色が上下(FR・BRはR面)', side: 'D色が横(FR・BRはF・B面)' };
+function drOrientation(tracked) {
+  const at = tracked.indexOf(DR_STICKER);
+  const face = C.FACES[Math.floor(at / 9)];
+  const eSlice = ['FR', 'BR'].includes(POS_OF_STICKER.get(at));
+  return face === 'U' || face === 'D' || (eSlice && face === 'R') ? 'ud' : 'side';
+}
 
 // opts.len: 最短手数を指定 / opts.drPos: DR エッジの位置(複数可)を指定。手数は 2 手以上でランダム
 function genSbSolve(opts = {}) {
@@ -512,7 +521,9 @@ function genSbSolve(opts = {}) {
     const { scramble, tracked } = sbScramble();
     const len = sqDist(tracked, k);
     const pos = drPosition(tracked);
-    if (byDr ? !opts.drPos.includes(pos) || len < 2 : len !== (opts.len || 5)) continue;
+    const ori = drOrientation(tracked);
+    const oriOk = !opts.drOri || opts.drOri === 'any' || opts.drOri === ori;
+    if (byDr ? !opts.drPos.includes(pos) || !oriOk || len < 2 : len !== (opts.len || 5)) continue;
     const r = sqSolutions(tracked, k);
     return {
       drill: 'sbSolve',
@@ -525,8 +536,9 @@ function genSbSolve(opts = {}) {
       scramble: scramble.join(' '),
       prompt: `${SQUARES[k].name}を${len}手で作る手順を入力`,
       drPos: pos,
-      caseKey: byDr ? `${k} DR@${pos}` : `${k} ${len}手`,
-      explain: `${SQUARES[k].name} ${len}手 DRエッジ:${pos} (${r.sols[0].join(' ')})`,
+      drOri: ori,
+      caseKey: byDr ? `${k} DR@${pos}${ori === 'ud' ? '' : '*'}` : `${k} ${len}手`,
+      explain: `${SQUARES[k].name} ${len}手 DRエッジ:${pos}(${DR_ORIS[ori]}) (${r.sols[0].join(' ')})`,
     };
   }
   throw new Error('問題を生成できませんでした');

@@ -105,9 +105,15 @@ for (const side of ['front', 'back']) {
   }
 }
 // SB 手順入力(DR エッジの位置で指定): DR エッジが指定した位置にあり、示した最短手順で揃う
+const piece0 = (n) => C.piecesStickers([n]);
 for (const pos of DR_POSITIONS) {
   for (const side of ['front', 'back']) {
-    const p = generate('sbSolve', { side, drPos: [pos] });
+    const ori = side === 'front' ? 'ud' : 'side';
+    const p = generate('sbSolve', { side, drPos: [pos], drOri: ori });
+    // D 色(3)のステッカーの面で向きを確かめる
+    const dAt = piece0(pos).find((i) => C.applyAlg(C.solved(), p.scramble)[i] === 3);
+    const dFace = C.FACES[Math.floor(dAt / 9)];
+    check(p.drOri === ori && ((dFace === 'U' || dFace === 'D' || (dFace === 'R' && ['FR', 'BR'].includes(pos))) === (ori === 'ud')), `sbSolve DR@${pos} ori ${ori} (${dFace})`);
     const at = C.applyAlg(C.solved(), p.scramble);
     const piece = C.piecesStickers([pos]);
     check(p.drPos === pos && piece.some((i) => at[i] === 3) && piece.some((i) => at[i] === 1), `sbSolve DR@${pos} ${side}`);
