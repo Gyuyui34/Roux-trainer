@@ -101,6 +101,7 @@ for (const side of ['front', 'back']) {
       check(alg.split(' ').length >= len && mergeMoves(presses).length === alg.split(' ').length, `sbSolve merge ${alg}`);
     }
     check(!solvesSquare(p.colors, side, []), 'sbSolve unsolved at start');
+    check(p.highlight.split('').filter((x) => x === '1').length === 7, 'sbSolve highlights only the 3 square pieces');
   }
 }
 // SB square: 示した手順で square が揃う / FB は揃ったまま / 手数より短い解がない

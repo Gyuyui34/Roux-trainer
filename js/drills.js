@@ -429,7 +429,8 @@ function sqSolutions(tracked, k) {
   return { k, len: sols[0].length, sols };
 }
 
-const sbHighlight = (tracked) => tracked.map((orig) => (SB_PIECE_STICKERS.has(orig) ? 1 : 0)).join('');
+// pieces: 色を付けるピースのステッカー(省略時は SB の 5 ピース)
+const sbHighlight = (tracked, pieces = SB_PIECE_STICKERS) => tracked.map((orig) => (pieces.has(orig) ? 1 : 0)).join('');
 
 // 入力した手順で square k が揃うか
 export function solvesSquare(colors, k, moves) {
@@ -500,7 +501,7 @@ function genSbSolve(opts = {}) {
     return {
       drill: 'sbSolve',
       colors: colorsOf(tracked),
-      highlight: sbHighlight(tracked),
+      highlight: sbHighlight(tracked, new Set(SQ_STICKERS[k])),
       sbSols: { [k]: r.sols.map((x) => x.join(' ')) },
       square: k,
       optLen: len,
