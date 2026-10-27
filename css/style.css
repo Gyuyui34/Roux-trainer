@@ -245,7 +245,7 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .seq { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border-radius: 12px; background: var(--panel); border: 2px solid var(--line); font-size: 17px; }
 .seq.correct { border-color: var(--ok); } .seq.wrong { border-color: var(--ng); }
 .seq b { white-space: nowrap; color: var(--sub); }
-.pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.pad { display: grid; grid-template-columns: 0.7fr 0.7fr 1.3fr 1.3fr; gap: 8px; }
 .padrow { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 8px; }
 .padbtn { padding: 13px 0; border-radius: 12px; background: var(--panel); border: 2px solid var(--line); font: 800 19px ui-monospace, "SF Mono", Menlo, monospace; color: var(--text); }
 .padbtn.tall { grid-row: span 2; }
