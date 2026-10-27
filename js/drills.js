@@ -402,34 +402,64 @@ function blocksOf(moves) {
 }
 
 // opts.minLen / opts.maxLen: 出題する最短手数(front と back の短い方)の範囲
+// FB だけ揃った盤面(M 列でセンターを揃える。SB のピースには影響しない)
+function sbScramble() {
+  const scramble = C.randomMoves(SB_MOVES, 30);
+  const fix = ['', 'M', 'M2', "M'"].find((m) => C.applyAlg(C.solved(), [...scramble, ...parse(m)])[4] === 0);
+  scramble.push(...parse(fix));
+  return { scramble, tracked: trackedApply(trackedSolved(), scramble) };
+}
+
+const sqDist = (tracked, k) => getSq(k).h(getSq(k).locsFromState(tracked));
+
+// square k の解答例を短い順に 3 つ。無駄な手を含む解(途中で揃う・1 手抜いても揃う)と、
+// square のピースの動きが同じ解(r と R の違いだけなど)は 1 つにまとめる
+function sqSolutions(tracked, k) {
+  const done = (moves) => C.isSolvedAt(colorsOf(trackedApply(tracked, moves)), SQ_STICKERS[k]);
+  const seen = new Set();
+  const sols = getSq(k).solve(tracked, { maxSolutions: 400, extra: 3 }).filter((x) => {
+    if (!tightXBlocks(x)) return false;
+    const key = blocksOf(x).map((b) => { const t = trackedApply(tracked, x.slice(0, b)); return SQ_STICKERS[k].map((i) => t.indexOf(i)).join(','); }).join('|');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    for (let i = 1; i < x.length; i++) if (done(x.slice(0, i))) return false;
+    for (let i = 0; i < x.length; i++) if (done([...x.slice(0, i), ...x.slice(i + 1)])) return false;
+    return true;
+  }).sort((p, q) => p.length - q.length).slice(0, 3);
+  return { k, len: sols[0].length, sols };
+}
+
+const sbHighlight = (tracked) => tracked.map((orig) => (SB_PIECE_STICKERS.has(orig) ? 1 : 0)).join('');
+
+// 入力した手順で square k が揃うか
+export function solvesSquare(colors, k, moves) {
+  return C.isSolvedAt(C.applyAlg(colors, moves), SQ_STICKERS[k]);
+}
+
+// 同じ層の手が続いたらまとめる(R R → R2、R R' → なし)。手数はまとめた後で数える
+export function mergeMoves(moves) {
+  const out = [];
+  for (const m of moves) {
+    const n = (x) => (x.endsWith('2') ? 2 : x.endsWith("'") ? 3 : 1);
+    const last = out[out.length - 1];
+    if (last && C.MOVES[last].base === C.MOVES[m].base) {
+      out.pop();
+      const t = (n(last) + n(m)) % 4;
+      const b = C.MOVES[m].base;
+      if (t) out.push(t === 1 ? b : t === 2 ? `${b}2` : `${b}'`);
+    } else out.push(m);
+  }
+  return out;
+}
+
 function genSbSquare(opts = {}) {
   const minLen = Math.max(2, opts.minLen || 2), maxLen = Math.max(minLen, opts.maxLen || 99);
   for (let attempt = 0; attempt < 20000; attempt++) {
-    const scramble = C.randomMoves(SB_MOVES, 30);
-    // M 列でセンターを揃える(SB のピースには影響しない)
-    const fix = ['', 'M', 'M2', "M'"].find((m) => C.applyAlg(C.solved(), [...scramble, ...parse(m)])[4] === 0);
-    scramble.push(...parse(fix));
-    const tracked = trackedApply(trackedSolved(), scramble);
+    const { scramble, tracked } = sbScramble();
     // 表の値がそのまま最短手数なので、範囲外の盤面は解を探す前に捨てる
-    const d = Math.min(...Object.keys(SQUARES).map((k) => getSq(k).h(getSq(k).locsFromState(tracked))));
+    const d = Math.min(...Object.keys(SQUARES).map((k) => sqDist(tracked, k)));
     if (d < minLen || d > maxLen) continue;
-    const res = Object.keys(SQUARES).map((k) => {
-      const done = (moves) => C.isSolvedAt(colorsOf(trackedApply(tracked, moves)), SQ_STICKERS[k]);
-      // 短い順に 3 つ。無駄な手を含む解(途中で揃う・1 手抜いても揃う)と、
-      // 最後の r と R だけが違う解(square には同じ)は除く
-      const seen = new Set();
-      const sols = getSq(k).solve(tracked, { maxSolutions: 400, extra: 3 }).filter((x) => {
-        if (!tightXBlocks(x)) return false;
-        // square のピースの動きが同じ解(r と R の違いだけなど)は 1 つにまとめる
-        const key = blocksOf(x).map((b) => { const t = trackedApply(tracked, x.slice(0, b)); return SQ_STICKERS[k].map((i) => t.indexOf(i)).join(','); }).join('|');
-        if (seen.has(key)) return false;
-        seen.add(key);
-        for (let i = 1; i < x.length; i++) if (done(x.slice(0, i))) return false;
-        for (let i = 0; i < x.length; i++) if (done([...x.slice(0, i), ...x.slice(i + 1)])) return false;
-        return true;
-      }).sort((p, q) => p.length - q.length).slice(0, 3);
-      return { k, len: sols[0].length, sols };
-    });
+    const res = Object.keys(SQUARES).map((k) => sqSolutions(tracked, k));
     const best = Math.min(...res.map((r) => r.len));
     if (best < 2) continue;
     const squares = res.filter((r) => r.len === best).map((r) => r.k);
@@ -443,7 +473,7 @@ function genSbSquare(opts = {}) {
     return {
       drill: 'sbSq',
       colors: colorsOf(tracked),
-      highlight: tracked.map((orig) => (SB_PIECE_STICKERS.has(orig) ? 1 : 0)).join(''),
+      highlight: sbHighlight(tracked),
       sbSols: Object.fromEntries(res.map((r) => [r.k, r.sols.map((x) => x.join(' '))])),
       scramble: scramble.join(' '),
       prompt: 'squareを作る最短手数は? Front / Back はどっち?',
@@ -459,6 +489,31 @@ function genSbSquare(opts = {}) {
   throw new Error('問題を生成できませんでした');
 }
 
+// 指定した square を指定した手数で作る問題。手順をボタンで入力して答える
+function genSbSolve(opts = {}) {
+  const k = SQUARES[opts.side] ? opts.side : 'front';
+  const len = opts.len || 5;
+  for (let attempt = 0; attempt < 40000; attempt++) {
+    const { scramble, tracked } = sbScramble();
+    if (sqDist(tracked, k) !== len) continue;
+    const r = sqSolutions(tracked, k);
+    return {
+      drill: 'sbSolve',
+      colors: colorsOf(tracked),
+      highlight: sbHighlight(tracked),
+      sbSols: { [k]: r.sols.map((x) => x.join(' ')) },
+      square: k,
+      optLen: len,
+      inputPad: true,
+      scramble: scramble.join(' '),
+      prompt: `${SQUARES[k].name}を${len}手で作る手順を入力`,
+      caseKey: `${k} ${len}手`,
+      explain: `${SQUARES[k].name} ${len}手 (${r.sols[0].join(' ')})`,
+    };
+  }
+  throw new Error('問題を生成できませんでした');
+}
+
 export const ENABLED_DRILLS = ['cmll'];
 
 export const DRILLS = {
@@ -468,6 +523,7 @@ export const DRILLS = {
   cmllEo: { name: 'CMLL→EO', full: 'CMLL後のEO', gen: (o) => genCmllEo({ ...o, auf: 'none' }), view: [-35, -30] },
   cmllEoAuf: { name: 'CMLL→EO+AUF', full: 'CMLL後のEO(AUFランダム)', gen: (o) => genCmllEo({ ...o, auf: 'random' }), view: [-35, -30] },
   cmllAuf: { name: 'CMLL+AUF', full: 'CMLL(AUFランダム)', gen: (o) => genCmll({ ...o, auf: 'random' }), view: [-35, -30] },
+  sbSolve: { name: 'SB手順入力', full: 'SBのsquareを手順で', gen: genSbSolve, view: [-28, -35], noSlot: true },
   sbSq: { name: 'SB square', full: 'SBのsquare', gen: genSbSquare, view: [-28, -35], noSlot: true },
   eo: { name: 'EO', full: 'LSE EO', gen: genEo, view: [-40, -20], ranges: [[1, 4], [5, 6], [7, 20]] },
 };

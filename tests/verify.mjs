@@ -1,6 +1,6 @@
 // node tests/verify.mjs : 手順表と出題生成の検証
 import * as C from '../js/cube.js';
-import { CMLL_CASES, generate, _internal, badEdges, SQUARES } from '../js/drills.js';
+import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves } from '../js/drills.js';
 
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('NG:', msg); } };
@@ -87,6 +87,20 @@ for (const [a, b] of [[2, 5], [3, 6], [6, 9], [2, 9], [4, 8]]) {
     const p = generate('sbSq', { minLen: a, maxLen: b });
     const nums = p.choices.map((c) => Number(c.label.replace('手', '')));
     check(nums.every((n) => n >= a && n <= b) && nums.includes(Number(p.caseKey.replace('手', ''))), `sbSq range ${a}-${b}: ${nums} ${p.caseKey}`);
+  }
+}
+// SB 手順入力: 指定どおりの手数・square。180°回しをボタン 2 回で入力しても揃う
+const quarter = (m) => (m.endsWith('2') ? [m[0], m[0]] : [m]);
+for (const side of ['front', 'back']) {
+  for (const len of [2, 4, 6, 9]) {
+    const p = generate('sbSolve', { side, len });
+    check(p.square === side && p.optLen === len && C.isSolvedAt(p.colors, C.FB_STICKERS), `sbSolve ${side} ${len} meta`);
+    for (const alg of p.sbSols[side]) {
+      const presses = alg.split(' ').flatMap(quarter);
+      check(solvesSquare(p.colors, side, presses), `sbSolve ${side} ${len} solves: ${alg}`);
+      check(alg.split(' ').length >= len && mergeMoves(presses).length === alg.split(' ').length, `sbSolve merge ${alg}`);
+    }
+    check(!solvesSquare(p.colors, side, []), 'sbSolve unsolved at start');
   }
 }
 // SB square: 示した手順で square が揃う / FB は揃ったまま / 手数より短い解がない

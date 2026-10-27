@@ -1,6 +1,6 @@
 import * as S from './store.js';
 import * as FX from './fx.js';
-import { generate, DRILLS, CMLL_CASES, identifyCmll, solvesCase } from './drills.js';
+import { generate, DRILLS, CMLL_CASES, identifyCmll, solvesCase, solvesSquare, mergeMoves } from './drills.js';
 import { CMLL_SETS } from './cmll.js';
 import { CubeView, ORIENTATIONS, COLOR_JA, COLOR_HEX, schemeFor } from './view3d.js';
 import { applyAlg, solved } from './cube.js';
@@ -16,6 +16,7 @@ let selectedDay = S.dayKey();
 // 片手の手順で練習した記録は末尾に Oh を付けたキーで別に保存する
 const drillOf = (cfg) => {
   if (cfg.menu === 'sb') return 'sbSq';
+  if (cfg.menu === 'sbSolve') return 'sbSolve';
   const base = cfg.kind === 'eo' ? (cfg.auf === 'random' ? 'cmllEoAuf' : 'cmllEo') : (cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
   return S.get().settings.algSlot === 'oh' ? `${base}Oh` : base;
 };
@@ -24,7 +25,9 @@ const selectedCases = (cfg) => CMLL_CASES.filter((c) => cfg.sets.includes(c.set)
 const cfgLabel = (key) => (key === 'all' ? '全ケース' : key.startsWith('cases:') ? `${key.split(',').length}ケース選択` : key);
 const baseDrill = (k) => k.replace(/Oh$/, '');
 const drillName = (k) => (DRILLS[baseDrill(k)].noSlot ? DRILLS[k].name : `${DRILLS[baseDrill(k)].name}・${k.endsWith('Oh') ? '片手' : '両手'}`);
-const MENU_LABEL = { cmll: 'CMLL', sb: 'SB square' };
+const MENU_LABEL = { cmll: 'CMLL', sb: 'SB 手数当て', sbSolve: 'SB 手順入力' };
+const SQ_LABEL = { front: 'Front square', back: 'Back square' };
+const PAD_MOVES = ['R', "R'", 'r', "r'", "M'", 'M', 'U', "U'"];
 const KIND_LABEL = { alg: '手順を当てる', eo: 'CMLL後のEO' };
 const AUF_LABEL = { none: 'AUFなし', random: 'AUFランダム' };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -37,7 +40,7 @@ const accColor = (p) => (p >= 90 ? 'var(--ok)' : p >= 70 ? 'var(--accent)' : 'va
 
 // 練習設定(前回の設定を引き継ぐ)
 function practiceCfg() {
-  const cfg = { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
+  const cfg = { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, sbLen: 5, sbSide: 'front', ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
   // 以前の設定で上限と下限が近すぎる場合は広げる
   if (cfg.sbMax - cfg.sbMin < 3) { cfg.sbMin = Math.min(cfg.sbMin, 6); cfg.sbMax = cfg.sbMin + 3; }
   return cfg;
@@ -138,6 +141,7 @@ function renderHome() {
   const setsLabel = nSel === CMLL_CASES.length ? '全ケース' : (cfg.excluded || []).some((n) => cfg.sets.includes(n.split(' ')[0])) ? `${nSel}ケース` : cfg.sets.join(' / ');
   const reviewN = d.mistakes.length;
   const isSb = cfg.menu === 'sb';
+  const isSolve = cfg.menu === 'sbSolve';
   const { sbMin, sbMax } = cfg;
   app.innerHTML = `
     <div class="row between" style="margin-bottom:12px">
@@ -163,7 +167,11 @@ function renderHome() {
     <div class="card">
       <div class="opt"><span class="sub">練習メニュー</span>
         <div class="chips" id="menu">${Object.entries(MENU_LABEL).map(([k, v]) => `<button class="chip ${cfg.menu === k ? 'on' : ''}" data-menu="${k}">${v}</button>`).join('')}</div></div>
-      ${isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
+      ${isSolve ? `<div class="opt"><span class="sub">最短手数</span>
+        <select id="sblen">${SB_LENS.map((n) => `<option value="${n}" ${n === cfg.sbLen ? 'selected' : ''}>${n}手</option>`).join('')}</select></div>
+      <div class="opt"><span class="sub">square</span>
+        <div class="chips" id="sbside">${Object.entries(SQ_LABEL).map(([k, v]) => `<button class="chip ${cfg.sbSide === k ? 'on' : ''}" data-side="${k}">${v}</button>`).join('')}</div></div>
+      <div class="sub">FBだけ揃った状態から、選んだsquareを最短${cfg.sbLen}手で作れる問題を出します。R R' r r' M' M U U' のボタンを順に押して手順を入力し、squareが揃えば正解です。</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
         <div class="row" style="gap:6px"><select id="sbmin">${SB_LENS.slice(0, -SB_GAP).map((n) => `<option value="${n}" ${n === sbMin ? 'selected' : ''}>${n}手</option>`).join('')}</select>
         <span class="sub">〜</span><select id="sbmax">${SB_LENS.slice(SB_GAP).map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
       <div class="sub">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。手数は R r U M を1手(180°も1手)で数えます。同じ手数なら両方正解です。</div>` : `
@@ -181,7 +189,7 @@ function renderHome() {
       <button class="btn" id="pickcases" style="margin:10px 0 0;padding:11px;font-size:15px">ケースを個別に選ぶ<small>選択中 ${nSel} / 42 ケース</small></button>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>`}
     </div>
-    <button class="btn primary" id="go-practice">練習スタート<small>${isSb ? `SB square ・ ${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
+    <button class="btn primary" id="go-practice">練習スタート<small>${isSolve ? `SB 手順入力 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbLen}手` : isSb ? `SB 手数当て ・ ${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
     <div class="row" style="gap:10px">
       <button class="btn blue" id="go-test" style="flex:1">⏱ テスト<small>${cfg.testN}問タイムアタック</small></button>
       <button class="btn" id="go-review" style="flex:1" ${reviewN ? '' : 'disabled'}>🔁 復習<small>間違えた問題 ${reviewN}</small></button>
@@ -196,6 +204,11 @@ function renderHome() {
   app.querySelector('#go-test').onclick = () => startQuiz('test');
   app.querySelector('#go-review').onclick = () => startQuiz('review');
   app.querySelector('#testn').onclick = (e) => { const b = e.target.closest('[data-n]'); if (b) update({ testN: Number(b.dataset.n) }); };
+  if (isSolve) {
+    app.querySelector('#sblen').onchange = (e) => update({ sbLen: Number(e.target.value) });
+    app.querySelector('#sbside').onclick = (e) => { const b = e.target.closest('[data-side]'); if (b) update({ sbSide: b.dataset.side }); };
+    return;
+  }
   if (isSb) {
     // 上限と下限は 3 手以上離す(選択肢の 4 つが範囲に収まるように)。片方を動かしたらもう片方も合わせる
     app.querySelector('#sbmin').onchange = (e) => { const v = Number(e.target.value); update({ sbMin: v, sbMax: Math.max(v + SB_GAP, sbMax) }); };
@@ -230,16 +243,17 @@ const algOf = (c) => algFor(c, S.get().settings.algSlot);
 
 function genOpts(cfg) {
   if (cfg.menu === 'sb') return { minLen: cfg.sbMin, maxLen: cfg.sbMax };
+  if (cfg.menu === 'sbSolve') return { len: cfg.sbLen, side: cfg.sbSide };
   return { sets: cfg.sets, only: selectedCases(cfg).map((c) => c.name), stats: cfg.weak ? (S.get().caseStats[drillOf(cfg)] || {}) : null, algOf };
 }
 
 function startQuiz(mode) {
   const cfg = practiceCfg();
   quiz = { mode, cfg, drill: drillOf(cfg), idx: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, answered: false, problems: null, mistakesIds: [] };
-  if (mode === 'test' && cfg.menu === 'sb') {
-    quiz.problems = Array.from({ length: cfg.testN }, () => generate('sbSq', genOpts(cfg)));
+  if (mode === 'test' && (cfg.menu === 'sb' || cfg.menu === 'sbSolve')) {
+    quiz.problems = Array.from({ length: cfg.testN }, () => generate(quiz.drill, genOpts(cfg)));
     quiz.total = cfg.testN;
-    quiz.cfgKey = `${cfg.sbMin}-${cfg.sbMax}手`;
+    quiz.cfgKey = cfg.menu === 'sb' ? `${cfg.sbMin}-${cfg.sbMax}手` : `${cfg.sbSide} ${cfg.sbLen}手`;
   } else if (mode === 'test') {
     const pool = selectedCases(cfg);
     const seq = [];
@@ -307,6 +321,16 @@ function buildQuizView() {
   };
   // AUF ランダムでは AUF と手順の両方を選んだ時点で判定する(順番は自由)
   app.querySelector('#choices').onclick = (e) => {
+    const padEl = e.target.closest('.padbtn');
+    if (padEl && quiz && !quiz.answered) {
+      if (padEl.dataset.mv) quiz.seq.push(padEl.dataset.mv);
+      else if (padEl.id === 'padback') quiz.seq.pop();
+      else if (padEl.id === 'padclear') quiz.seq = [];
+      else if (padEl.id === 'padok') { answerSeq(padEl); return; }
+      FX.sfxTick();
+      showSeq();
+      return;
+    }
     const cellEl = e.target.closest('.eocell');
     if (cellEl && quiz && !quiz.answered) {
       const pos = cellEl.dataset.pos;
@@ -368,14 +392,20 @@ function nextProblem() {
   quiz.view.setColors(p.colors, p.highlight || null);
   quiz.view.setView(...DRILLS.cmll.view, quiz.idx > 0);
   aufRow.classList.toggle('two', rowOpts.length === 2);
-  app.querySelector('#choices').classList.toggle('nums', !!p.highlight);
+  app.querySelector('#choices').classList.toggle('nums', !!p.highlight && !p.inputPad);
   app.querySelector('#prompt').textContent = p.prompt;
   quiz.selEdges = [];
   const afterLabel = app.querySelector('#afterlabel');
   if (afterLabel) afterLabel.hidden = true;
   app.querySelector('#scene').classList.toggle('compact', !!p.eoAnswers);
   app.querySelector('#scene').classList.remove('solved-view');
-  if (p.eoAnswers) {
+  quiz.seq = [];
+  if (p.inputPad) {
+    app.querySelector('#choices').innerHTML = `<div class="seq" id="seq"></div>
+      <div class="pad">${PAD_MOVES.map((m) => `<button class="padbtn" data-mv="${esc(m)}">${esc(m)}</button>`).join('')}</div>
+      <div class="padrow"><button class="padbtn sm" id="padback">⌫ 1手戻す</button><button class="padbtn sm" id="padclear">クリア</button><button class="padbtn sm ok" id="padok">決定</button></div>`;
+    showSeq();
+  } else if (p.eoAnswers) {
     app.querySelector('#choices').innerHTML = eoBoard(p);
     app.querySelector('#eosubmit').onclick = answerEo;
   } else {
@@ -460,6 +490,7 @@ function settle(ok, rect, wrongMsg) {
   fb.classList.toggle('sb', !!p.sbSols);
   if (p.sbSols) app.querySelector('#scene').classList.add('solved-view');
   fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : wrongMsg}</div>
+    ${p.inputPad && quiz.seq.length ? `<div class="sub">入力: <span class="mono">${esc(mergeMoves(quiz.seq).join(' '))}</span>(${mergeMoves(quiz.seq).length}手 / 最短${p.optLen}手)</div>` : ''}
     ${p.sbSols ? '' : `<div class="sub mono">${esc(p.explain)}</div>`}</div>
     ${autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
     ${p.sbSols ? sbTable(p) : ''}
@@ -484,6 +515,33 @@ function sbTable(p) {
   return `<table class="soltab">${rows}</table>`;
 }
 
+// 入力中の手順。同じ層が続いたら R R → R2 のようにまとめて手数を数える
+function showSeq() {
+  const el = app.querySelector('#seq');
+  if (!el) return;
+  const merged = mergeMoves(quiz.seq);
+  el.innerHTML = quiz.seq.length
+    ? `<span class="mono">${esc(merged.join(' ') || '(打ち消し合って0手)')}</span><b>${merged.length}手</b>`
+    : '<span class="sub">ボタンを押して手順を入力</span>';
+}
+
+// 判定後はボタンを隠して、解答例の表まで 1 画面に収める
+function hidePad() {
+  app.querySelectorAll('.pad, .padrow').forEach((el) => { el.hidden = true; });
+}
+
+// SB 手順入力: 入力した手順で square が揃えば正解
+function answerSeq(btn) {
+  if (!quiz || quiz.answered) return;
+  const p = quiz.current;
+  if (!quiz.seq.length) { toast('手順を入力してください'); return; }
+  quiz.answered = true;
+  const ok = solvesSquare(p.colors, p.square, quiz.seq);
+  app.querySelector('#seq').classList.add(ok ? 'correct' : 'wrong');
+  hidePad();
+  settle(ok, btn.getBoundingClientRect(), 'squareが揃いません');
+}
+
 // 答えを見る: 正解を表示して不正解として記録する
 function reveal() {
   if (!quiz || quiz.answered) return;
@@ -492,6 +550,7 @@ function reveal() {
   app.querySelectorAll('.picked').forEach((x) => x.classList.remove('picked'));
   app.querySelectorAll('.choice').forEach((b, k) => b.classList.add(k === p.answer ? 'correct' : 'dim'));
   app.querySelectorAll('.aufbtn').forEach((x) => x.classList.add((p.aufAnswers || []).includes(x.dataset.auf) ? 'correct' : 'dim'));
+  hidePad();
   settle(false, app.querySelector('#reveal').getBoundingClientRect(), '答え');
 }
 
