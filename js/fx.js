@@ -95,3 +95,32 @@ export function floatText(text, x, y, cls = '') {
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1100);
 }
+
+// 解答アニメーションで1手回し終わるたびの音: カチッという短いノイズ + 柔らかいマリンバ風の音。
+// 手が進むほど音階(ペンタトニック)が上がり、最後の手では和音を鳴らす
+const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+function click(vol = 0.12) {
+  if (!ctx || !enabled) return;
+  const t = ctx.currentTime;
+  const n = Math.floor(ctx.sampleRate * 0.03);
+  const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 3;
+  const s = ctx.createBufferSource();
+  s.buffer = buf;
+  const f = ctx.createBiquadFilter();
+  f.type = 'bandpass';
+  f.frequency.value = 2800;
+  f.Q.value = 1.2;
+  const g = ctx.createGain();
+  g.gain.value = vol;
+  s.connect(f).connect(g).connect(ctx.destination);
+  s.start(t);
+}
+export function sfxTurn(step, last = false) {
+  click();
+  const f = 523 * Math.pow(2, PENTA[Math.min(step, PENTA.length - 1)] / 12);
+  tone(f, 0, 0.22, 'sine', 0.12);
+  tone(f * 2, 0, 0.08, 'sine', 0.03);
+  if (last) { tone(f * 1.25, 0.06, 0.35, 'sine', 0.08); tone(f * 1.5, 0.12, 0.45, 'sine', 0.08); }
+}
