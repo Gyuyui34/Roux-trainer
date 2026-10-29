@@ -96,10 +96,10 @@ export function floatText(text, x, y, cls = '') {
   setTimeout(() => el.remove(), 1100);
 }
 
-// 解答アニメーションで1手回し終わるたびの音: カチッという短いノイズ + 柔らかいマリンバ風の音。
-// 手が進むほど音階(ペンタトニック)が上がり、最後の手では和音を鳴らす
+// 解答アニメーションで1手回し終わるたびの音: カチッという短いノイズ + 柔らかい低めのマリンバ風の音。
+// 手が進むほど音階(ペンタトニック)が上がり、最後の手はベースの重低音を鳴らす
 const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
-function click(vol = 0.12) {
+function click(vol = 0.1) {
   if (!ctx || !enabled) return;
   const t = ctx.currentTime;
   const n = Math.floor(ctx.sampleRate * 0.03);
@@ -110,17 +110,38 @@ function click(vol = 0.12) {
   s.buffer = buf;
   const f = ctx.createBiquadFilter();
   f.type = 'bandpass';
-  f.frequency.value = 2800;
+  f.frequency.value = 1400;
   f.Q.value = 1.2;
   const g = ctx.createGain();
   g.gain.value = vol;
   s.connect(f).connect(g).connect(ctx.destination);
   s.start(t);
 }
+// 音程が下がりながら響く低音(f0 → f1)
+function bass(f0, f1, dur, vol) {
+  if (!ctx || !enabled) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.6);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(ctx.destination);
+  o.start(t);
+  o.stop(t + dur + 0.02);
+}
 export function sfxTurn(step, last = false) {
   click();
-  const f = 523 * Math.pow(2, PENTA[Math.min(step, PENTA.length - 1)] / 12);
-  tone(f, 0, 0.22, 'sine', 0.12);
-  tone(f * 2, 0, 0.08, 'sine', 0.03);
-  if (last) { tone(f * 1.25, 0.06, 0.35, 'sine', 0.08); tone(f * 1.5, 0.12, 0.45, 'sine', 0.08); }
+  if (last) {
+    // 低い基音と、iPhoneのスピーカーでも聞こえるよう1オクターブ上を重ねる
+    bass(90, 41, 0.7, 0.5);
+    bass(180, 82, 0.5, 0.18);
+    return;
+  }
+  const f = 196 * Math.pow(2, PENTA[Math.min(step, PENTA.length - 1)] / 12);
+  tone(f, 0, 0.24, 'sine', 0.16);
+  tone(f * 2, 0, 0.07, 'sine', 0.03);
 }
