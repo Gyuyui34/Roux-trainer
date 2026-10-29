@@ -37,6 +37,10 @@ export function schemeFor(up, front) {
   return ORIENTATIONS.get(`${up}-${front}`) || ORIENTATIONS.get('yellow-green');
 }
 
+// ステッカーを 1 枚ずつ 3D 上に置く。手のアニメーションでは、その層のステッカーをまとめて回す
+const ROT_SIGN = [1, -1, 1]; // 正の軸から見た時計回り → CSS の回転角の向き(x, y, z)
+const ROT_FN = ['rotateX', 'rotateY', 'rotateZ'];
+
 export class CubeView {
   constructor(host, { scale = 0.48 } = {}) {
     this.host = host;
@@ -48,19 +52,17 @@ export class CubeView {
     this.cube = document.createElement('div');
     this.cube.className = 'cube3d';
     host.appendChild(this.cube);
-    this.stickerEls = new Array(54);
-    C.FACES.forEach((face, f) => {
-      const el = document.createElement('div');
-      el.className = 'face';
-      el.dataset.face = face;
-      for (let i = 0; i < 9; i++) {
-        const s = document.createElement('div');
-        s.className = 'sticker';
-        el.appendChild(s);
-        this.stickerEls[f * 9 + i] = s;
-      }
-      this.cube.appendChild(el);
-      this[`face${face}`] = el;
+    this.tileEls = [];
+    this.stickerEls = [];
+    C.STICKERS.forEach(() => {
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      const st = document.createElement('div');
+      st.className = 'sticker';
+      tile.appendChild(st);
+      this.cube.appendChild(tile);
+      this.tileEls.push(tile);
+      this.stickerEls.push(st);
     });
     this.layout();
     this.bindDrag();
@@ -69,9 +71,15 @@ export class CubeView {
 
   layout() {
     const size = Math.min(this.host.clientWidth, this.host.clientHeight) * this.scale;
+    this.size = size;
     this.cube.style.width = this.cube.style.height = `${size}px`;
-    C.FACES.forEach((face) => {
-      this[`face${face}`].style.transform = `${FACE_TRANSFORM[face]} translateZ(${size / 2}px)`;
+    const u = size / 3;
+    C.STICKERS.forEach((s, i) => {
+      const el = this.tileEls[i];
+      el.style.width = el.style.height = `${u}px`;
+      el.style.left = el.style.top = `${(size - u) / 2}px`;
+      const c = s.pos.map((v, a) => v * u + s.normal[a] * (u / 2));
+      el.style.transform = `translate3d(${c[0]}px, ${-c[1]}px, ${c[2]}px) ${FACE_TRANSFORM[C.FACES[s.face]]}`;
     });
     this.apply();
   }
@@ -92,6 +100,40 @@ export class CubeView {
       this.stickerEls[i].style.background = ghost ? '' : COLOR_HEX[this.scheme[c]];
       this.stickerEls[i].classList.toggle('ghost', ghost);
     });
+  }
+
+  // 手 m を ms ミリ秒かけて回し、終わったら after の盤面(と色付け)に切り替える
+  animateMove(m, ms, after, afterHighlight) {
+    this.cancelMove();
+    const { axis, layers, turns } = C.MOVES[m];
+    const group = document.createElement('div');
+    group.className = 'layer';
+    this.cube.appendChild(group);
+    const moving = this.tileEls.filter((_, i) => layers.includes(C.STICKERS[i].pos[axis]));
+    moving.forEach((el) => group.appendChild(el));
+    const deg = ROT_SIGN[axis] * (turns === 3 ? -90 : turns * 90);
+    return new Promise((resolve) => {
+      const finish = (snap) => {
+        if (this.anim !== anim) return;
+        this.anim = null;
+        moving.forEach((el) => this.cube.appendChild(el));
+        group.remove();
+        if (snap) this.setColors(after, afterHighlight);
+        resolve(snap);
+      };
+      const anim = { finish };
+      this.anim = anim;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        group.style.transition = `transform ${ms}ms ease-in-out`;
+        group.style.transform = `${ROT_FN[axis]}(${deg}deg)`;
+      }));
+      setTimeout(() => finish(true), ms + 30);
+    });
+  }
+
+  // 回している途中の手を止める(盤面は変えない)
+  cancelMove() {
+    if (this.anim) this.anim.finish(false);
   }
 
   setView(pitch, yaw, animate = false) {

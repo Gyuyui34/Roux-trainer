@@ -528,24 +528,27 @@ function settle(ok, rect, wrongMsg) {
   } else {
     fb.querySelector('#next').onclick = nextProblem;
   }
-  // 手順入力: 表の手順をタップするとその手順のアニメーション。不正解なら最初の手順を自動で流す
+  // 手順入力: 表の最初の手順を自動で流す。表の手順をタップするとその手順に切り替える
   if (p.inputPad) {
     fb.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => { tr.onclick = () => playAlg(tr.dataset.alg); });
-    if (!ok) playAlg(fb.querySelector('.soltab tr[data-alg]').dataset.alg);
+    playAlg(fb.querySelector('.soltab tr[data-alg]').dataset.alg);
   }
 }
 
-// 解答手順のアニメーション(1 手ずつ盤面を進めて、最後まで行ったら最初からくり返す)
+// 解答手順のアニメーション(層をなめらかに回し、最後まで行ったら最初からくり返す)
 let animToken = null;
 function stopAnim() {
   animToken = null;
+  if (quiz && quiz.view) quiz.view.cancelMove();
   const l = app.querySelector('#animlabel');
   if (l) l.hidden = true;
 }
-function playAlg(alg) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function playAlg(alg) {
   if (!quiz) return;
   stopAnim();
   const p = quiz.current;
+  const view = quiz.view;
   const moves = alg.split(' ');
   // 盤面と色付け(highlight)を同じ手で動かす
   const colors = [p.colors], marks = [p.highlight.split('')];
@@ -558,16 +561,24 @@ function playAlg(alg) {
   label.hidden = false;
   const token = {};
   animToken = token;
-  let i = 0;
-  const step = () => {
-    if (animToken !== token || !quiz) return;
-    quiz.view.setColors(colors[i], marks[i].join(''));
-    label.innerHTML = `${i === 0 ? '▶ ' : ''}${moves.map((m, k) => `<span class="${k === i - 1 ? 'cur' : k < i ? 'done' : ''}">${esc(m)}</span>`).join(' ')}`;
-    const wait = i === 0 ? 900 : i === moves.length ? 1500 : 700;
-    i = i === moves.length ? 0 : i + 1;
-    setTimeout(step, wait);
+  const show = (cur) => {
+    label.innerHTML = moves.map((m, k) => `<span class="${k === cur ? 'cur' : k < cur ? 'done' : ''}">${esc(m)}</span>`).join(' ');
   };
-  step();
+  while (animToken === token && quiz) {
+    view.setColors(colors[0], marks[0].join(''));
+    show(-1);
+    await sleep(800);
+    for (let i = 0; i < moves.length && animToken === token; i++) {
+      show(i);
+      const ms = moves[i].endsWith('2') ? 620 : 420;
+      await view.animateMove(moves[i], ms, colors[i + 1], marks[i + 1].join(''));
+      if (animToken !== token) return;
+      await sleep(140);
+    }
+    if (animToken !== token) return;
+    show(moves.length);
+    await sleep(1400);
+  }
 }
 
 // SB の解答例: square ごとに短い順。最短の行を強調する

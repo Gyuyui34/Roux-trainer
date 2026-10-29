@@ -66,9 +66,10 @@ function quarterPerm(axis, layers, turns) {
 
 export const MOVES = {};
 for (const [name, [axis, layers, turns]] of Object.entries(BASE_MOVES)) {
-  MOVES[name] = { perm: quarterPerm(axis, layers, turns % 4), axis, base: name };
-  MOVES[name + '2'] = { perm: quarterPerm(axis, layers, (turns * 2) % 4), axis, base: name };
-  MOVES[name + "'"] = { perm: quarterPerm(axis, layers, (turns * 3) % 4), axis, base: name };
+  // layers / turns はアニメーション用(正の軸から見た時計回りの 90° 回数)
+  MOVES[name] = { perm: quarterPerm(axis, layers, turns % 4), axis, base: name, layers, turns: turns % 4 };
+  MOVES[name + '2'] = { perm: quarterPerm(axis, layers, (turns * 2) % 4), axis, base: name, layers, turns: (turns * 2) % 4 };
+  MOVES[name + "'"] = { perm: quarterPerm(axis, layers, (turns * 3) % 4), axis, base: name, layers, turns: (turns * 3) % 4 };
 }
 
 export function solved() {
