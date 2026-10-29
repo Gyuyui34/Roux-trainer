@@ -182,7 +182,7 @@ function renderHome() {
       <div class="sub">FBだけ揃った状態から、${cfg.sbBy === 'dr' ? 'DRエッジが選んだ位置・向きにある問題を出します。EOは、DRエッジのD面の色がU/D面を向いていれば合っている、とします(FR・BRにあるときは、F/B面を向いていれば合っている)。最短手数は問題文に表示されます。' : `選んだsquareを最短${cfg.sbLen}手で作れる問題を出します。`}U' U r r' R R' のボタンを順に押して手順を入力し(R r' は M、R' r は M' に自動変換)、squareが最短手数で揃えば正解です(揃っても手数が多いと不正解)。</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
         <div class="row" style="gap:6px"><select id="sbmin">${SB_LENS.slice(0, -SB_GAP).map((n) => `<option value="${n}" ${n === sbMin ? 'selected' : ''}>${n}手</option>`).join('')}</select>
         <span class="sub">〜</span><select id="sbmax">${SB_LENS.slice(SB_GAP).map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
-      <div class="sub">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。手数は R r U M を1手(180°も1手)で数えます。同じ手数なら両方正解です。</div>` : `
+      <div class="sub">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。手数はSTM(R r U M を1手、180°も1手)で数えます。同じ手数なら両方正解です。</div>` : `
       <div class="opt"><span class="sub">問題の種類</span>
         <div class="chips" id="kind">${Object.entries(KIND_LABEL).map(([k, v]) => `<button class="chip ${cfg.kind === k ? 'on' : ''}" data-kind="${k}">${v}</button>`).join('')}</div></div>
       <div class="opt"><span class="sub">手順</span>
@@ -537,8 +537,8 @@ function sbTable(p) {
     }).join('')).join('');
     return `<table class="soltab">${rows}</table>`;
   };
-  return `<div class="soltitle">HTM(180°も1手)</div>${table(p.sbSols, htm)}
-    ${p.qtmSols ? `<div class="soltitle">QTM(180°は2手)</div>${table(p.qtmSols, qtm)}` : ''}`;
+  return `<div class="soltitle">STM(中層・180°も1手)</div>${table(p.sbSols, htm)}
+    ${p.qtmSols ? `<div class="soltitle">QSTM(90°ごとに1手、中層も含む)</div>${table(p.qtmSols, qtm)}` : ''}`;
 }
 
 // 入力中の手順。同じ層が続いたら R R → R2 のようにまとめて手数を数える
