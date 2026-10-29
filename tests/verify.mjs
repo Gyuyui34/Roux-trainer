@@ -90,7 +90,9 @@ for (const [a, b] of [[2, 5], [3, 6], [6, 9], [2, 9], [4, 8]]) {
   }
 }
 // SB 手順入力: 指定どおりの手数・square。180°回しをボタン 2 回で入力しても揃う
-const quarter = (m) => (m.endsWith('2') ? [m[0], m[0]] : [m]);
+// パッドは U U' M M' R R'。r は M' R、r' は M R' で入力する
+const PRESS = { r: ["M'", 'R'], "r'": ['M', "R'"] };
+const quarter = (m) => (m.endsWith('2') ? [m[0], m[0]] : [m]).flatMap((q) => PRESS[q] || [q]);
 for (const side of ['front', 'back']) {
   for (const len of [2, 4, 6, 9]) {
     const p = generate('sbSolve', { side, len });

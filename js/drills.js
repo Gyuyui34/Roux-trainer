@@ -495,8 +495,8 @@ export function solvesSquare(colors, k, moves) {
 
 // 続けて押した手をまとめる。手数はまとめた後で数える
 // ・同じ層: R R → R2、R R' → なし
-// ・R と r' (順不同) → M、R' と r (順不同) → M'
-const TO_M = { "R r'": 'M', "r' R": 'M', "R' r": "M'", "r R'": "M'" };
+// ・M' と R (順不同) → r、M と R' (順不同) → r'
+const TO_M = { "M' R": 'r', "R M'": 'r', "M R'": "r'", "R' M": "r'" };
 export function mergeMoves(moves) {
   const out = [];
   const n = (x) => (x.endsWith('2') ? 2 : x.endsWith("'") ? 3 : 1);
