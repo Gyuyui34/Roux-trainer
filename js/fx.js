@@ -16,7 +16,7 @@ export function unlockAudio() {
   } catch (e) { ctx = null; }
 }
 
-function tone(freq, start, dur, type = 'sine', vol = 0.18) {
+function tone(freq, start, dur, type = 'sine', vol = 0.18, attack = 0.01) {
   if (!ctx || !enabled) return;
   const t = ctx.currentTime + start;
   const o = ctx.createOscillator();
@@ -24,7 +24,7 @@ function tone(freq, start, dur, type = 'sine', vol = 0.18) {
   o.type = type;
   o.frequency.setValueAtTime(freq, t);
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(vol, t + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g).connect(ctx.destination);
   o.start(t);
@@ -99,7 +99,7 @@ export function floatText(text, x, y, cls = '') {
 // 解答アニメーションで1手回し終わるたびの音: カチッという短いノイズ + 柔らかいマリンバ風の音。
 // 手が進むほど音階(ペンタトニック)が上がり、最後の手では和音を鳴らす
 const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
-function click(vol = 0.12) {
+function click(vol = 0.08) {
   if (!ctx || !enabled) return;
   const t = ctx.currentTime;
   const n = Math.floor(ctx.sampleRate * 0.03);
@@ -120,7 +120,16 @@ function click(vol = 0.12) {
 export function sfxTurn(step, last = false) {
   click();
   const f = 523 * Math.pow(2, PENTA[Math.min(step, PENTA.length - 1)] / 12);
-  tone(f, 0, 0.22, 'sine', 0.12);
-  tone(f * 2, 0, 0.08, 'sine', 0.03);
-  if (last) { tone(f * 1.25, 0.06, 0.35, 'sine', 0.08); tone(f * 1.5, 0.12, 0.45, 'sine', 0.08); }
+  if (!last) {
+    tone(f, 0, 0.22, 'sine', 0.085);
+    tone(f * 2, 0, 0.08, 'sine', 0.02);
+    return;
+  }
+  // 最後の和音: 高い音を重ねると耳に痛いので、ミとソは根音の下側に置き(ド・ミ・ソの転回形)、
+  // 根音が高すぎるときは1オクターブ下げる。立ち上がりを少し柔らかくし、長めに響かせる
+  const r = f > 800 ? f / 2 : f;
+  tone(r, 0, 0.5, 'sine', 0.08, 0.015);
+  tone(r * 0.75, 0.05, 0.6, 'sine', 0.06, 0.02);
+  tone(r * 0.625, 0.1, 0.7, 'sine', 0.06, 0.02);
+  tone(r / 2, 0.1, 0.8, 'sine', 0.05, 0.02);
 }
