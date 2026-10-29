@@ -531,7 +531,7 @@ function settle(ok, rect, wrongMsg) {
     ${autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
     ${p.sbSols ? sbTable(p) : ''}
     ${p.inputPad ? '<div class="animhint">キューブをタップで一時停止/再生、右の余白で1手進む、左の余白で1手戻る</div>' : ''}
-    <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(p.scramble)}</div></details>`;
+    <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(p.sbSols ? u2p(p.scramble) : p.scramble)}</div></details>`;
   if (autoNext) {
     setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, p.eoAnswers ? 1600 : 800);
   } else {
@@ -553,9 +553,11 @@ function stopAnim() {
   const l = app.querySelector('#animlabel');
   if (l) l.hidden = true;
 }
+// U2 は U2' と書く(表示とアニメーションの向きだけ。中身は U2 のまま)
+const u2p = (alg) => alg.replace(/U2(?!')/g, "U2'");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const invMove = (m) => (m.endsWith("'") ? m.slice(0, -1) : m.endsWith('2') ? m : m + "'");
-const moveMs = (m) => (m.endsWith('2') ? 800 : 560);
+const invMove = (m) => (m.endsWith("2'") ? m.slice(0, -1) : m.endsWith("'") ? m.slice(0, -1) : m.endsWith('2') ? m : m + "'");
+const moveMs = (m) => (m.includes('2') ? 800 : 560);
 
 function animShow() {
   const a = anim, label = app.querySelector('#animlabel');
@@ -654,10 +656,10 @@ function playAlg(alg) {
   if (!quiz) return;
   stopAnim();
   const p = quiz.current;
-  const moves = alg.split(' ');
+  const moves = u2p(alg).split(' ');
   // 盤面と色付け(highlight)を同じ手で動かす
   const colors = [p.colors], marks = [p.highlight.split('')];
-  for (const m of moves) {
+  for (const m of alg.split(' ')) {
     colors.push(applyAlg(colors[colors.length - 1], [m]));
     marks.push(applyAlg(marks[marks.length - 1], [m]));
   }
@@ -680,7 +682,7 @@ function sbTable(p) {
       const n = count(alg);
       return `<tr class="${n === best ? 'best' : ''}" ${p.inputPad ? `data-alg="${esc(alg)}"` : ''}>${i ? '' : `<th rowspan="${list.length}" class="sq">${k === 'front' ? 'Front' : 'Back'}</th>`}
       <td class="n">${n === best ? '★' : ''}${n}手</td>
-      <td class="alg">${esc(alg)}</td></tr>`;
+      <td class="alg">${esc(u2p(alg))}</td></tr>`;
     }).join('')).join('');
     return `<table class="soltab">${rows}</table>`;
   };
@@ -694,7 +696,7 @@ function showSeq() {
   if (!el) return;
   const merged = mergeMoves(quiz.seq);
   el.innerHTML = quiz.seq.length
-    ? `<span class="mono">${esc(merged.join(' ') || '(打ち消し合って0手)')}</span><b>QSTM ${qtmLen(merged)} / STM ${merged.length}</b>`
+    ? `<span class="mono">${esc(u2p(merged.join(' ')) || '(打ち消し合って0手)')}</span><b>QSTM ${qtmLen(merged)} / STM ${merged.length}</b>`
     : '<span class="sub">ボタンを押して手順を入力</span>';
 }
 
@@ -708,7 +710,7 @@ function seqSummary(p) {
   const merged = mergeMoves(quiz.seq);
   const solved = solvesSquare(p.colors, p.square, quiz.seq);
   const item = (name, n, opt) => `<span class="${solved && n <= opt ? 'hit' : ''}">${name} ${n}手(最短${opt}手)${solved && n <= opt ? ' ✓' : ''}</span>`;
-  return `<div class="sub seqsum">入力: <span class="mono">${esc(merged.join(' '))}</span><br>
+  return `<div class="sub seqsum">入力: <span class="mono">${esc(u2p(merged.join(' ')))}</span><br>
     ${item('QSTM', qtmLen(merged), p.qOptLen ?? '-')} ・ ${item('STM', merged.length, p.optLen)}</div>`;
 }
 

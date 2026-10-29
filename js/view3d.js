@@ -104,9 +104,12 @@ export class CubeView {
 
   // 層を回すアニメーション。手 m の層をまとめ、progress(0〜1)で回転角を決める。
   // tween で好きな位置まで動かし、stopTween でその場に止められる(途中で一時停止できる)
+  // "U2'" のように 2' と書いた手は ' の向きに 180° 回す
   beginMove(m, progress = 0) {
     this.cancelMove();
-    const { axis, layers, turns } = C.MOVES[m];
+    const rev = m.endsWith("2'");
+    const { axis, layers, turns: t0 } = C.MOVES[rev ? m.slice(0, -1) : m];
+    const turns = rev ? -2 * (C.MOVES[m.slice(0, -2) + "'"].turns === 3 ? 1 : -1) : t0;
     const group = document.createElement('div');
     group.className = 'layer';
     this.cube.appendChild(group);

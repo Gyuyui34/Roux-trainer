@@ -516,6 +516,13 @@ export function mergeMoves(moves) {
   return out;
 }
 
+// 解答例は最後の R 系を r 系で書く(square のピースは R 層だけなので揃い方は同じ)。
+// 最後の x 軸の手は最短解なら 1 手だけなので、直前と重なることはない
+const wideLast = (sols) => [...new Set(sols.map((x) => {
+  const m = x[x.length - 1];
+  return (m && m[0] === 'R' ? [...x.slice(0, -1), 'r' + m.slice(1)] : x).join(' ');
+}))];
+
 function genSbSquare(opts = {}) {
   const minLen = Math.max(2, opts.minLen || 2), maxLen = Math.max(minLen, opts.maxLen || 99);
   for (let attempt = 0; attempt < 20000; attempt++) {
@@ -538,8 +545,8 @@ function genSbSquare(opts = {}) {
       drill: 'sbSq',
       colors: colorsOf(tracked),
       highlight: sbHighlight(tracked),
-      sbSols: Object.fromEntries(res.map((r) => [r.k, r.sols.map((x) => x.join(' '))])),
-      qtmSols: Object.fromEntries(res.map((r) => [r.k, sqSolutionsQtm(tracked, r.k).map((x) => x.join(' '))])),
+      sbSols: Object.fromEntries(res.map((r) => [r.k, wideLast(r.sols)])),
+      qtmSols: Object.fromEntries(res.map((r) => [r.k, wideLast(sqSolutionsQtm(tracked, r.k))])),
       scramble: scramble.join(' '),
       prompt: 'squareを作る最短手数は? Front / Back はどっち?',
       choices,
@@ -588,8 +595,8 @@ function genSbSolve(opts = {}) {
       drill: 'sbSolve',
       colors: colorsOf(tracked),
       highlight: sbHighlight(tracked, new Set(SQ_STICKERS[k])),
-      sbSols: { [k]: r.sols.map((x) => x.join(' ')) },
-      qtmSols: { [k]: qSols.map((x) => x.join(' ')) },
+      sbSols: { [k]: wideLast(r.sols) },
+      qtmSols: { [k]: wideLast(qSols) },
       qOptLen: qLen,
       square: k,
       optLen: len,
