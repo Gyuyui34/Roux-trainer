@@ -148,9 +148,12 @@ export class CubeView {
   }
 
   bindDrag() {
-    let last = null;
+    // ドラッグで視点を回す。ほとんど動かさずに離したらタップとして onTap(横位置0〜1) を呼ぶ
+    let last = null, start = null, moved = 0;
     this.host.addEventListener('pointerdown', (e) => {
       last = [e.clientX, e.clientY];
+      start = e.target.closest('button') ? null : last;
+      moved = 0;
       this.cube.style.transition = '';
       this.host.setPointerCapture(e.pointerId);
     });
@@ -158,12 +161,20 @@ export class CubeView {
       if (!last) return;
       const dx = e.clientX - last[0], dy = e.clientY - last[1];
       last = [e.clientX, e.clientY];
+      moved += Math.abs(dx) + Math.abs(dy);
       this.yaw += dx * 0.6;
       this.pitch = Math.max(-90, Math.min(90, this.pitch - dy * 0.6));
       this.apply();
     });
     const end = () => { last = null; };
-    this.host.addEventListener('pointerup', end);
+    this.host.addEventListener('pointerup', (e) => {
+      if (start && moved < 10 && this.onTap) {
+        const r = this.host.getBoundingClientRect();
+        this.onTap((e.clientX - r.left) / r.width);
+      }
+      start = null;
+      end();
+    });
     this.host.addEventListener('pointercancel', end);
   }
 }

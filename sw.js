@@ -1,5 +1,5 @@
 // オフライン用キャッシュ。ファイルを更新したら VERSION を上げる
-const VERSION = 'v28';
+const VERSION = 'v29';
 const FILES = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest',
   'js/app.js', 'js/store.js', 'js/fx.js', 'js/drills.js', 'js/cmll.js', 'js/cube.js', 'js/solver.js', 'js/view3d.js',

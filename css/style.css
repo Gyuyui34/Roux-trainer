@@ -104,6 +104,7 @@ h2 { font-size: 16px; margin: 20px 0 8px; color: var(--sub); font-weight: 600; }
 .choices.nums { grid-template-columns: repeat(4, 1fr); }
 .choices.nums .choice { justify-content: center; text-align: center; padding: 14px 0; font-size: 18px; font-weight: 800; }
 .soltab { width: 100%; border-collapse: collapse; margin-top: 2px; font-size: 14px; }
+.animhint { margin-top: 4px; font-size: 11px; color: var(--sub); }
 .soltitle { margin-top: 4px; font-size: 12px; font-weight: 800; color: var(--sub); }
 .soltab td, .soltab th { padding: 2px 6px; border-top: 1px solid var(--line); }
 .soltab th.sq { width: 44px; text-align: left; font-weight: 800; vertical-align: middle; }
@@ -260,6 +261,7 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .seqsum .hit { color: var(--ok); font-weight: 800; }
 .anim-label { position: absolute; left: 0; top: 4px; max-width: 70%; font: 700 14px ui-monospace, "SF Mono", Menlo, monospace; padding: 4px 8px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); color: var(--sub); pointer-events: none; }
 .anim-label .done { color: var(--text); }
+.anim-label .pause { color: var(--accent); }
 .anim-label .cur { color: #1a1300; background: var(--accent); border-radius: 4px; padding: 0 3px; }
 .soltab tr[data-alg] { cursor: pointer; }
 .soltab tr.playing td.alg { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 3px; text-underline-offset: 4px; }

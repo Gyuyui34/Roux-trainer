@@ -522,6 +522,7 @@ function settle(ok, rect, wrongMsg) {
     ${p.sbSols ? '' : `<div class="sub mono">${esc(p.explain)}</div>`}</div>
     ${autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
     ${p.sbSols ? sbTable(p) : ''}
+    ${p.inputPad ? '<div class="animhint">キューブをタップで一時停止/再生、右側で1手進む、左側で1手戻る</div>' : ''}
     <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(p.scramble)}</div></details>`;
   if (autoNext) {
     setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, p.eoAnswers ? 1600 : 800);
@@ -536,19 +537,87 @@ function settle(ok, rect, wrongMsg) {
 }
 
 // 解答手順のアニメーション(層をなめらかに回し、最後まで行ったら最初からくり返す)
-let animToken = null;
+// キューブの中央タップで一時停止/再開、右側タップで1手進む、左側タップで1手戻る
+let anim = null; // {moves, colors, marks, pos(済んだ手数), paused, run}
 function stopAnim() {
-  animToken = null;
-  if (quiz && quiz.view) quiz.view.cancelMove();
+  anim = null;
+  if (quiz && quiz.view) { quiz.view.cancelMove(); quiz.view.onTap = null; }
   const l = app.querySelector('#animlabel');
   if (l) l.hidden = true;
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function playAlg(alg) {
+const invMove = (m) => (m.endsWith("'") ? m.slice(0, -1) : m.endsWith('2') ? m : m + "'");
+const moveMs = (m) => (m.endsWith('2') ? 800 : 560);
+
+function animShow(cur = -1) {
+  const a = anim, label = app.querySelector('#animlabel');
+  if (!a || !label) return;
+  label.innerHTML = a.moves.map((m, k) => `<span class="${k === cur ? 'cur' : k < a.pos ? 'done' : ''}">${esc(m)}</span>`).join(' ')
+    + (a.paused ? ' <span class="pause">⏸</span>' : '');
+}
+// 今の手数の盤面に戻す(動いている途中の層は止める)
+function animSnap() {
+  quiz.view.cancelMove();
+  quiz.view.setColors(anim.colors[anim.pos], anim.marks[anim.pos].join(''));
+}
+
+async function animRun() {
+  const a = anim, run = {};
+  a.run = run;
+  const view = quiz.view;
+  const alive = () => anim === a && a.run === run && !a.paused;
+  while (alive()) {
+    if (a.pos >= a.moves.length) {
+      animShow();
+      await sleep(600);
+      if (!alive()) return;
+      a.pos = 0;
+      animSnap();
+      animShow();
+      await sleep(400);
+      continue;
+    }
+    const i = a.pos;
+    animShow(i);
+    const ok = await view.animateMove(a.moves[i], moveMs(a.moves[i]), a.colors[i + 1], a.marks[i + 1].join(''));
+    if (!ok || !alive()) return;
+    a.pos = i + 1;
+    animShow();
+    await sleep(180);
+  }
+}
+
+function animPause() {
+  anim.paused = true;
+  anim.run = null;
+  animSnap();
+  animShow();
+}
+
+async function animStep(dir) {
+  const a = anim;
+  if (!a.paused) animPause(); else animSnap();
+  const from = a.pos, to = from + dir;
+  if (to < 0 || to > a.moves.length) return;
+  a.pos = to;
+  const m = dir > 0 ? a.moves[from] : invMove(a.moves[to]);
+  animShow(dir > 0 ? from : to);
+  const ok = await quiz.view.animateMove(m, Math.round(moveMs(m) * 0.7), a.colors[to], a.marks[to].join(''));
+  if (ok && anim === a) animShow();
+}
+
+function animTap(x) {
+  if (!anim) return;
+  if (x > 2 / 3) animStep(1);
+  else if (x < 1 / 3) animStep(-1);
+  else if (anim.paused) { anim.paused = false; animSnap(); animRun(); }
+  else animPause();
+}
+
+function playAlg(alg) {
   if (!quiz) return;
   stopAnim();
   const p = quiz.current;
-  const view = quiz.view;
   const moves = alg.split(' ');
   // 盤面と色付け(highlight)を同じ手で動かす
   const colors = [p.colors], marks = [p.highlight.split('')];
@@ -557,28 +626,12 @@ async function playAlg(alg) {
     marks.push(applyAlg(marks[marks.length - 1], [m]));
   }
   app.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => tr.classList.toggle('playing', tr.dataset.alg === alg));
-  const label = app.querySelector('#animlabel');
-  label.hidden = false;
-  const token = {};
-  animToken = token;
-  const show = (cur) => {
-    label.innerHTML = moves.map((m, k) => `<span class="${k === cur ? 'cur' : k < cur ? 'done' : ''}">${esc(m)}</span>`).join(' ');
-  };
-  while (animToken === token && quiz) {
-    view.setColors(colors[0], marks[0].join(''));
-    show(-1);
-    await sleep(400);
-    for (let i = 0; i < moves.length && animToken === token; i++) {
-      show(i);
-      const ms = moves[i].endsWith('2') ? 800 : 560;
-      await view.animateMove(moves[i], ms, colors[i + 1], marks[i + 1].join(''));
-      if (animToken !== token) return;
-      await sleep(180);
-    }
-    if (animToken !== token) return;
-    show(moves.length);
-    await sleep(600);
-  }
+  app.querySelector('#animlabel').hidden = false;
+  anim = { moves, colors, marks, pos: 0, paused: false, run: null };
+  quiz.view.onTap = animTap;
+  animSnap();
+  animShow();
+  sleep(400).then(() => { if (anim && anim.moves === moves && !anim.paused && !anim.run) animRun(); });
 }
 
 // SB の解答例: square ごとに短い順。最短の行を強調する
