@@ -567,17 +567,17 @@ async function playAlg(alg) {
   while (animToken === token && quiz) {
     view.setColors(colors[0], marks[0].join(''));
     show(-1);
-    await sleep(800);
+    await sleep(400);
     for (let i = 0; i < moves.length && animToken === token; i++) {
       show(i);
-      const ms = moves[i].endsWith('2') ? 620 : 420;
+      const ms = moves[i].endsWith('2') ? 800 : 560;
       await view.animateMove(moves[i], ms, colors[i + 1], marks[i + 1].join(''));
       if (animToken !== token) return;
-      await sleep(140);
+      await sleep(180);
     }
     if (animToken !== token) return;
     show(moves.length);
-    await sleep(1400);
+    await sleep(600);
   }
 }
 

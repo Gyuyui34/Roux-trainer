@@ -102,7 +102,7 @@ for (const side of ['front', 'back']) {
     }
     check(!solvesSquare(p.colors, side, []), 'sbSolve unsolved at start');
     check(p.qOptLen === qtmLen(p.qtmSols[side][0].split(' ')), 'sbSolve qOptLen');
-    check(p.highlight.split('').filter((x) => x === '1').length === 7, 'sbSolve highlights only the 3 square pieces');
+    check(p.highlight.split('').filter((x) => x === '1').length === 8, 'sbSolve highlights only the 3 square pieces + R center');
   }
 }
 // SB 手順入力(DR エッジの位置で指定): DR エッジが指定した位置にあり、示した最短手順で揃う

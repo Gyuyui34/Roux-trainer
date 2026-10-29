@@ -484,7 +484,9 @@ function sqSolutionsQtm(tracked, k) {
   return filterSols(tracked, k, qtmSearch(tracked, k).sort(byLen), true).slice(0, 3);
 }
 
-const sbHighlight = (tracked, pieces = SB_PIECE_STICKERS) => tracked.map((orig) => (pieces.has(orig) ? 1 : 0)).join('');
+// R面センター(13)は常に色付き
+const R_CENTER = 1 * 9 + 4;
+const sbHighlight = (tracked, pieces = SB_PIECE_STICKERS) => tracked.map((orig) => (pieces.has(orig) || orig === R_CENTER ? 1 : 0)).join('');
 
 // 入力した手順で square k が揃うか
 export function solvesSquare(colors, k, moves) {
