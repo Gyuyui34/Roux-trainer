@@ -350,19 +350,25 @@ function buildQuizView() {
   app.querySelector('#choices').addEventListener('pointerdown', (e) => {
     const padEl = e.target.closest('.padbtn[data-mv]');
     if (!padEl || !quiz || quiz.answered) return;
+    const before = quiz.seq.slice();
     quiz.seq.push(padEl.dataset.mv);
     FX.sfxTick();
     showSeq();
+    seqCube(before, padEl.dataset.mv);
   });
   app.querySelector('#choices').onclick = (e) => {
     const padEl = e.target.closest('.padbtn');
     if (padEl && padEl.dataset.mv) return;
     if (padEl && quiz && !quiz.answered) {
-      if (padEl.id === 'padback') quiz.seq.pop();
+      if (padEl.id === 'padok') { answerSeq(padEl); return; }
+      const before = quiz.seq.slice();
+      let undo = null;
+      if (padEl.id === 'padback') undo = quiz.seq.pop();
       else if (padEl.id === 'padclear') quiz.seq = [];
-      else if (padEl.id === 'padok') { answerSeq(padEl); return; }
       FX.sfxTick();
       showSeq();
+      // 1手戻すときは取り消した手を逆に回す。クリアは最初の盤面にすぐ戻す
+      seqCube(before, undo ? invMove(undo) : null);
       return;
     }
     const cellEl = e.target.closest('.eocell');
@@ -713,6 +719,22 @@ function seqSummary(p) {
   const item = (name, n, opt) => `<span class="${solved && n <= opt ? 'hit' : ''}">${name} ${n}手(最短${opt}手)${solved && n <= opt ? ' ✓' : ''}</span>`;
   return `<div class="sub seqsum">入力: <span class="mono">${esc(u2p(merged.join(' ')))}</span><br>
     ${item('QSTM', qtmLen(merged), p.qOptLen ?? '-')} ・ ${item('STM', merged.length, p.optLen)}</div>`;
+}
+
+// 入力中の手順をキューブにそのまま反映する。before の盤面から手 m を短く回して今の盤面にする
+function seqCube(before, m) {
+  const p = quiz.current, view = quiz.view;
+  const now = (seq) => [applyAlg(p.colors, seq), applyAlg(p.highlight.split(''), seq).join('')];
+  const [cs, hs] = now(quiz.seq);
+  view.cancelMove();
+  if (!m) { view.setColors(cs, hs); return; }
+  view.setColors(...now(before));
+  view.beginMove(m);
+  view.tween(1, m.includes('2') ? 260 : 180).then((ok) => {
+    if (!ok) return;
+    view.endMove();
+    view.setColors(cs, hs);
+  });
 }
 
 // SB 手順入力: 入力した手順で square が揃えば正解
