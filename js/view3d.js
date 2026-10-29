@@ -148,7 +148,8 @@ export class CubeView {
   }
 
   bindDrag() {
-    // ドラッグで視点を回す。ほとんど動かさずに離したらタップとして onTap(横位置0〜1) を呼ぶ
+    // ドラッグで視点を回す。ほとんど動かさずに離したらタップとして onTap(side) を呼ぶ
+    // side: キューブの左の余白 -1 / キューブ本体 0 / 右の余白 1
     let last = null, start = null, moved = 0;
     this.host.addEventListener('pointerdown', (e) => {
       last = [e.clientX, e.clientY];
@@ -169,8 +170,9 @@ export class CubeView {
     const end = () => { last = null; };
     this.host.addEventListener('pointerup', (e) => {
       if (start && moved < 10 && this.onTap) {
-        const r = this.host.getBoundingClientRect();
-        this.onTap((e.clientX - r.left) / r.width);
+        let l = Infinity, r = -Infinity;
+        for (const el of this.tileEls) { const b = el.getBoundingClientRect(); l = Math.min(l, b.left); r = Math.max(r, b.right); }
+        this.onTap(e.clientX < l ? -1 : e.clientX > r ? 1 : 0);
       }
       start = null;
       end();

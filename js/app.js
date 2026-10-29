@@ -522,7 +522,7 @@ function settle(ok, rect, wrongMsg) {
     ${p.sbSols ? '' : `<div class="sub mono">${esc(p.explain)}</div>`}</div>
     ${autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
     ${p.sbSols ? sbTable(p) : ''}
-    ${p.inputPad ? '<div class="animhint">キューブをタップで一時停止/再生、右側で1手進む、左側で1手戻る</div>' : ''}
+    ${p.inputPad ? '<div class="animhint">キューブをタップで一時停止/再生、右の余白で1手進む、左の余白で1手戻る</div>' : ''}
     <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(p.scramble)}</div></details>`;
   if (autoNext) {
     setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, p.eoAnswers ? 1600 : 800);
@@ -537,7 +537,7 @@ function settle(ok, rect, wrongMsg) {
 }
 
 // 解答手順のアニメーション(層をなめらかに回し、最後まで行ったら最初からくり返す)
-// キューブの中央タップで一時停止/再開、右側タップで1手進む、左側タップで1手戻る
+// キューブ本体のタップで一時停止/再開、右の余白タップで1手進む、左の余白タップで1手戻る
 let anim = null; // {moves, colors, marks, pos(済んだ手数), paused, run}
 function stopAnim() {
   anim = null;
@@ -606,10 +606,9 @@ async function animStep(dir) {
   if (ok && anim === a) animShow();
 }
 
-function animTap(x) {
+function animTap(side) {
   if (!anim) return;
-  if (x > 2 / 3) animStep(1);
-  else if (x < 1 / 3) animStep(-1);
+  if (side) animStep(side);
   else if (anim.paused) { anim.paused = false; animSnap(); animRun(); }
   else animPause();
 }
