@@ -336,6 +336,11 @@ function buildQuizView() {
   afterLabel.textContent = 'CMLLを回した後';
   afterLabel.hidden = true;
   sceneEl.appendChild(afterLabel);
+  const animLabel = document.createElement('div');
+  animLabel.id = 'animlabel';
+  animLabel.className = 'anim-label';
+  animLabel.hidden = true;
+  sceneEl.appendChild(animLabel);
   app.querySelector('#quit').onclick = () => {
     if (quiz.mode === 'test') askConfirm('テストを中断しますか?', 'このテストは記録されません。', '中断する', endQuiz);
     else endQuiz();
@@ -400,6 +405,7 @@ function tickTimer() {
 
 function nextProblem() {
   if (!quiz) return;
+  stopAnim();
   if (quiz.total && quiz.idx >= quiz.total) { finishQuiz(); return; }
   const p = quiz.problems ? quiz.problems[quiz.idx] : { ...generate(baseDrill(quiz.drill), genOpts(quiz.cfg)), drill: quiz.drill };
   quiz.current = p;
@@ -419,7 +425,7 @@ function nextProblem() {
   const afterLabel = app.querySelector('#afterlabel');
   if (afterLabel) afterLabel.hidden = true;
   app.querySelector('#scene').classList.toggle('compact', !!p.eoAnswers);
-  app.querySelector('#scene').classList.remove('solved-view');
+  app.querySelector('#scene').classList.remove('solved-view', 'anim-view');
   quiz.seq = [];
   if (p.inputPad) {
     app.querySelector('#choices').innerHTML = `<div class="seq" id="seq"></div>
@@ -509,7 +515,8 @@ function settle(ok, rect, wrongMsg) {
   const autoNext = ok && S.get().settings.autoNext && !p.sbSols;
   // 解答例の表まで 1 画面に収まるよう、キューブを小さくする
   fb.classList.toggle('sb', !!p.sbSols);
-  if (p.sbSols) app.querySelector('#scene').classList.add('solved-view');
+  // 手順入力ではボタンを隠すので、アニメーションが見えるよう少しだけ小さくする
+  if (p.sbSols) app.querySelector('#scene').classList.add(p.inputPad ? 'anim-view' : 'solved-view');
   fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : wrongMsg}${ok && p.inputPad && quiz.okVia ? `<span class="via">${quiz.okVia}</span>` : ''}</div>
     ${p.inputPad && quiz.seq.length ? seqSummary(p) : ''}
     ${p.sbSols ? '' : `<div class="sub mono">${esc(p.explain)}</div>`}</div>
@@ -521,6 +528,46 @@ function settle(ok, rect, wrongMsg) {
   } else {
     fb.querySelector('#next').onclick = nextProblem;
   }
+  // 手順入力: 表の手順をタップするとその手順のアニメーション。不正解なら最初の手順を自動で流す
+  if (p.inputPad) {
+    fb.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => { tr.onclick = () => playAlg(tr.dataset.alg); });
+    if (!ok) playAlg(fb.querySelector('.soltab tr[data-alg]').dataset.alg);
+  }
+}
+
+// 解答手順のアニメーション(1 手ずつ盤面を進めて、最後まで行ったら最初からくり返す)
+let animToken = null;
+function stopAnim() {
+  animToken = null;
+  const l = app.querySelector('#animlabel');
+  if (l) l.hidden = true;
+}
+function playAlg(alg) {
+  if (!quiz) return;
+  stopAnim();
+  const p = quiz.current;
+  const moves = alg.split(' ');
+  // 盤面と色付け(highlight)を同じ手で動かす
+  const colors = [p.colors], marks = [p.highlight.split('')];
+  for (const m of moves) {
+    colors.push(applyAlg(colors[colors.length - 1], [m]));
+    marks.push(applyAlg(marks[marks.length - 1], [m]));
+  }
+  app.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => tr.classList.toggle('playing', tr.dataset.alg === alg));
+  const label = app.querySelector('#animlabel');
+  label.hidden = false;
+  const token = {};
+  animToken = token;
+  let i = 0;
+  const step = () => {
+    if (animToken !== token || !quiz) return;
+    quiz.view.setColors(colors[i], marks[i].join(''));
+    label.innerHTML = `${i === 0 ? '▶ ' : ''}${moves.map((m, k) => `<span class="${k === i - 1 ? 'cur' : k < i ? 'done' : ''}">${esc(m)}</span>`).join(' ')}`;
+    const wait = i === 0 ? 900 : i === moves.length ? 1500 : 700;
+    i = i === moves.length ? 0 : i + 1;
+    setTimeout(step, wait);
+  };
+  step();
 }
 
 // SB の解答例: square ごとに短い順。最短の行を強調する
@@ -531,7 +578,7 @@ function sbTable(p) {
     const best = Math.min(...Object.values(sols).map((l) => count(l[0])));
     const rows = Object.entries(sols).map(([k, list]) => list.map((alg, i) => {
       const n = count(alg);
-      return `<tr class="${n === best ? 'best' : ''}">${i ? '' : `<th rowspan="${list.length}" class="sq">${k === 'front' ? 'Front' : 'Back'}</th>`}
+      return `<tr class="${n === best ? 'best' : ''}" ${p.inputPad ? `data-alg="${esc(alg)}"` : ''}>${i ? '' : `<th rowspan="${list.length}" class="sq">${k === 'front' ? 'Front' : 'Back'}</th>`}
       <td class="n">${n === best ? '★' : ''}${n}手</td>
       <td class="alg">${esc(alg)}</td></tr>`;
     }).join('')).join('');
@@ -748,6 +795,7 @@ function renderResult({ timeMs, pb, prev }) {
 }
 
 function endQuiz() {
+  stopAnim();
   const q = quiz;
   quiz = null;
   if (q && q.mode === 'practice' && q.idx > 0) toast(`おつかれさま!${q.idx}問 ・ 正答率${pct(q.correct, q.idx)}% ・ +${q.xp} XP`);

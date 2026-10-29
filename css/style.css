@@ -111,6 +111,7 @@ h2 { font-size: 16px; margin: 20px 0 8px; color: var(--sub); font-weight: 600; }
 .soltab tr.best td { background: rgba(46,204,113,.16); }
 .soltab tr.best td.n { color: var(--ok); }
 .scene.solved-view { max-height: 18vh; }
+.scene.anim-view { max-height: 30vh; }
 .feedback.sb .res { font-size: 17px; }
 .feedback.sb #next { padding: 8px 18px !important; }
 .feedback.sb .scr { margin-top: 4px; }
@@ -256,3 +257,8 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .padbtn:disabled { opacity: .5; }
 .feedback .via { margin-left: 8px; font-size: 13px; font-weight: 800; color: var(--ok); }
 .seqsum .hit { color: var(--ok); font-weight: 800; }
+.anim-label { position: absolute; left: 0; top: 4px; max-width: 70%; font: 700 14px ui-monospace, "SF Mono", Menlo, monospace; padding: 4px 8px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); color: var(--sub); pointer-events: none; }
+.anim-label .done { color: var(--text); }
+.anim-label .cur { color: #1a1300; background: var(--accent); border-radius: 4px; padding: 0 3px; }
+.soltab tr[data-alg] { cursor: pointer; }
+.soltab tr.playing td.alg { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 3px; text-underline-offset: 4px; }
