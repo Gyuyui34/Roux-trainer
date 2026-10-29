@@ -102,8 +102,9 @@ export class CubeView {
     });
   }
 
-  // 手 m を ms ミリ秒かけて回し、終わったら after の盤面(と色付け)に切り替える
-  animateMove(m, ms, after, afterHighlight) {
+  // 層を回すアニメーション。手 m の層をまとめ、progress(0〜1)で回転角を決める。
+  // tween で好きな位置まで動かし、stopTween でその場に止められる(途中で一時停止できる)
+  beginMove(m, progress = 0) {
     this.cancelMove();
     const { axis, layers, turns } = C.MOVES[m];
     const group = document.createElement('div');
@@ -111,29 +112,56 @@ export class CubeView {
     this.cube.appendChild(group);
     const moving = this.tileEls.filter((_, i) => layers.includes(C.STICKERS[i].pos[axis]));
     moving.forEach((el) => group.appendChild(el));
-    const deg = ROT_SIGN[axis] * (turns === 3 ? -90 : turns * 90);
+    this.moving = { m, group, tiles: moving, axis, deg: ROT_SIGN[axis] * (turns === 3 ? -90 : turns * 90), progress: 0 };
+    this.setProgress(progress);
+  }
+
+  setProgress(p) {
+    const mv = this.moving;
+    mv.progress = p;
+    const e = p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2; // ease-in-out
+    mv.group.style.transform = `${ROT_FN[mv.axis]}(${mv.deg * e}deg)`;
+  }
+
+  // 今の位置から target まで動かす。1手ぶん(0→1)が ms ミリ秒。止められたら false
+  tween(target, ms) {
+    this.stopTween();
+    const mv = this.moving;
+    const from = mv.progress, dur = Math.max(1, Math.abs(target - from) * ms), t0 = performance.now();
     return new Promise((resolve) => {
-      const finish = (snap) => {
-        if (this.anim !== anim) return;
-        this.anim = null;
-        moving.forEach((el) => this.cube.appendChild(el));
-        group.remove();
-        if (snap) this.setColors(after, afterHighlight);
-        resolve(snap);
+      const tw = { resolve };
+      this.tw = tw;
+      const step = (now) => {
+        if (this.tw !== tw) return;
+        const k = Math.min(1, (now - t0) / dur);
+        this.setProgress(from + (target - from) * k);
+        if (k < 1) tw.raf = requestAnimationFrame(step);
+        else { this.tw = null; resolve(true); }
       };
-      const anim = { finish };
-      this.anim = anim;
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        group.style.transition = `transform ${ms}ms ease-in-out`;
-        group.style.transform = `${ROT_FN[axis]}(${deg}deg)`;
-      }));
-      setTimeout(() => finish(true), ms + 30);
+      tw.raf = requestAnimationFrame(step);
     });
   }
 
-  // 回している途中の手を止める(盤面は変えない)
+  stopTween() {
+    const tw = this.tw;
+    if (!tw) return;
+    this.tw = null;
+    cancelAnimationFrame(tw.raf);
+    tw.resolve(false);
+  }
+
+  // 回している層を元に戻す(ステッカーの色は変えない)
+  endMove() {
+    const mv = this.moving;
+    if (!mv) return;
+    this.moving = null;
+    mv.tiles.forEach((el) => this.cube.appendChild(el));
+    mv.group.remove();
+  }
+
   cancelMove() {
-    if (this.anim) this.anim.finish(false);
+    this.stopTween();
+    this.endMove();
   }
 
   setView(pitch, yaw, animate = false) {

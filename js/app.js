@@ -549,16 +549,31 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const invMove = (m) => (m.endsWith("'") ? m.slice(0, -1) : m.endsWith('2') ? m : m + "'");
 const moveMs = (m) => (m.endsWith('2') ? 800 : 560);
 
-function animShow(cur = -1) {
+function animShow() {
   const a = anim, label = app.querySelector('#animlabel');
   if (!a || !label) return;
+  const cur = quiz.view.moving ? a.pos : -1;
   label.innerHTML = a.moves.map((m, k) => `<span class="${k === cur ? 'cur' : k < a.pos ? 'done' : ''}">${esc(m)}</span>`).join(' ')
     + (a.paused ? ' <span class="pause">⏸</span>' : '');
 }
-// 今の手数の盤面に戻す(動いている途中の層は止める)
+// 今の手数の盤面にする(回している途中の層は戻す)
 function animSnap() {
   quiz.view.cancelMove();
   quiz.view.setColors(anim.colors[anim.pos], anim.marks[anim.pos].join(''));
+}
+// 回している途中の手(moves[pos])を target(1:回し切る / 0:回す前に戻す)まで動かす
+async function animGo(target, ms) {
+  const a = anim, view = quiz.view;
+  animShow();
+  const ok = await view.tween(target, ms);
+  if (!ok || anim !== a) return false;
+  view.endMove();
+  if (target === 1) {
+    a.pos++;
+    view.setColors(a.colors[a.pos], a.marks[a.pos].join(''));
+  }
+  animShow();
+  return true;
 }
 
 async function animRun() {
@@ -577,39 +592,42 @@ async function animRun() {
       await sleep(400);
       continue;
     }
-    const i = a.pos;
-    animShow(i);
-    const ok = await view.animateMove(a.moves[i], moveMs(a.moves[i]), a.colors[i + 1], a.marks[i + 1].join(''));
-    if (!ok || !alive()) return;
-    a.pos = i + 1;
-    animShow();
+    if (!view.moving) view.beginMove(a.moves[a.pos]);
+    if (!(await animGo(1, moveMs(a.moves[a.pos]))) || !alive()) return;
     await sleep(180);
   }
 }
 
+// 一時停止。回している途中ならその角度のまま止める
 function animPause() {
   anim.paused = true;
   anim.run = null;
-  animSnap();
+  quiz.view.stopTween();
   animShow();
 }
 
-async function animStep(dir) {
-  const a = anim;
-  if (!a.paused) animPause(); else animSnap();
-  const from = a.pos, to = from + dir;
-  if (to < 0 || to > a.moves.length) return;
-  a.pos = to;
-  const m = dir > 0 ? a.moves[from] : invMove(a.moves[to]);
-  animShow(dir > 0 ? from : to);
-  const ok = await quiz.view.animateMove(m, Math.round(moveMs(m) * 0.7), a.colors[to], a.marks[to].join(''));
-  if (ok && anim === a) animShow();
+function animStep(dir) {
+  const a = anim, view = quiz.view;
+  if (!a.paused) animPause(); else view.stopTween();
+  const n = a.moves.length;
+  if (!view.moving) {
+    // 端では反対の端へループする
+    if (dir > 0 && a.pos >= n) { a.pos = 0; animSnap(); animShow(); return; }
+    if (dir < 0 && a.pos <= 0) { a.pos = n; animSnap(); animShow(); return; }
+    if (dir > 0) view.beginMove(a.moves[a.pos], 0);
+    else {
+      a.pos--;
+      view.setColors(a.colors[a.pos], a.marks[a.pos].join(''));
+      view.beginMove(a.moves[a.pos], 1);
+    }
+  }
+  animGo(dir > 0 ? 1 : 0, Math.round(moveMs(a.moves[a.pos]) * 0.7));
 }
 
 function animTap(side) {
   if (!anim) return;
   if (side) animStep(side);
-  else if (anim.paused) { anim.paused = false; animSnap(); animRun(); }
+  else if (anim.paused) { anim.paused = false; animRun(); }
   else animPause();
 }
 
