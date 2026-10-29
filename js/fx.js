@@ -98,9 +98,9 @@ export function floatText(text, x, y, cls = '') {
 
 // 解答アニメーションで1手回し終わるたびの音: ファミコン風の矩形波(高い成分を少し削る)。
 // 手が進むほど音階(ドレミソラのペンタトニック)が上がり、最後の手は根音に長3度と5度を少しずつ遅らせて重ねる。
-// 最後の手がいつも同じ音(ソ, G5)になるよう、手数に合わせて始まりの音を下げる
+// 最後の手がいつも同じ音(ド, C5)になるよう、手数に合わせて始まりの音を下げる
 const PENTA = [0, 2, 4, 7, 9];
-const LAST = 8; // C4 から数えたペンタトニックの段: 8 = G5
+const LAST = 5; // C4 から数えたペンタトニックの段: 5 = C5(523Hz)
 const pentaHz = (i) => 261.63 * Math.pow(2, (12 * Math.floor(i / 5) + PENTA[((i % 5) + 5) % 5]) / 12);
 function chip(freq, start, dur, vol) {
   if (!ctx || !enabled) return;
