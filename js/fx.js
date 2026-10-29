@@ -96,40 +96,31 @@ export function floatText(text, x, y, cls = '') {
   setTimeout(() => el.remove(), 1100);
 }
 
-// 解答アニメーションで1手回し終わるたびの音: カチッという短いノイズ + 柔らかいマリンバ風の音。
-// 手が進むほど音階(ペンタトニック)が上がり、最後の手では和音を鳴らす
+// 解答アニメーションで1手回し終わるたびの音: ファミコン風の矩形波(高い成分を少し削る)。
+// 手が進むほど音階(ペンタトニック)が上がり、最後の手は根音に長3度と5度を少しずつ遅らせて重ねる
 const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
-function click(vol = 0.08) {
+function chip(freq, start, dur, vol) {
   if (!ctx || !enabled) return;
-  const t = ctx.currentTime;
-  const n = Math.floor(ctx.sampleRate * 0.03);
-  const buf = ctx.createBuffer(1, n, ctx.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 3;
-  const s = ctx.createBufferSource();
-  s.buffer = buf;
-  const f = ctx.createBiquadFilter();
-  f.type = 'bandpass';
-  f.frequency.value = 2800;
-  f.Q.value = 1.2;
+  const t = ctx.currentTime + start;
+  const o = ctx.createOscillator();
   const g = ctx.createGain();
-  g.gain.value = vol;
-  s.connect(f).connect(g).connect(ctx.destination);
-  s.start(t);
+  const f = ctx.createBiquadFilter();
+  o.type = 'square';
+  o.frequency.setValueAtTime(freq, t);
+  f.type = 'lowpass';
+  f.frequency.value = 3500;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol * 0.35, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(f).connect(ctx.destination);
+  o.start(t);
+  o.stop(t + dur + 0.05);
 }
 export function sfxTurn(step, last = false) {
-  click();
   const f = 523 * Math.pow(2, PENTA[Math.min(step, PENTA.length - 1)] / 12);
-  if (!last) {
-    tone(f, 0, 0.22, 'sine', 0.085);
-    tone(f * 2, 0, 0.08, 'sine', 0.02);
-    return;
+  chip(f, 0, 0.12, 0.085);
+  if (last) {
+    chip(f * 1.25, 0.06, 0.19, 0.057);
+    chip(f * 1.5, 0.12, 0.25, 0.057);
   }
-  // 最後の和音: 高い音を重ねると耳に痛いので、ミとソは根音の下側に置き(ド・ミ・ソの転回形)、
-  // 根音が高すぎるときは1オクターブ下げる。立ち上がりを少し柔らかくし、長めに響かせる
-  const r = f > 800 ? f / 2 : f;
-  tone(r, 0, 0.5, 'sine', 0.08, 0.015);
-  tone(r * 0.75, 0.05, 0.6, 'sine', 0.06, 0.02);
-  tone(r * 0.625, 0.1, 0.7, 'sine', 0.06, 0.02);
-  tone(r / 2, 0.1, 0.8, 'sine', 0.05, 0.02);
 }
