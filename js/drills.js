@@ -379,7 +379,22 @@ const getSq = (k) => (sqSolvers[k] ||= new BlockSolver(SQUARES[k].pieces, SB_MOV
 
 // R r M が続く部分を、R 層と M 層の回転量にまとめる。もっと少ない手数で書ける並びは無駄なので除く
 const X_TURNS = { R: [1, 0], r: [1, 3], M: [0, 1] };
-function tightXBlocks(moves) {
+// QTM の手数(180° は 2 手)
+export const qtmLen = (moves) => moves.reduce((a, m) => a + (m.endsWith('2') ? 2 : 1), 0);
+const blockQtm = qtmLen;
+// R 層と M 層の回転量 (a, b) を R / r / M の 2 手以内で作るときの QTM の最小手数
+const X_QTM_MIN = (() => {
+  const t = [0, 1, 2, 1];
+  const out = [...Array(4)].map(() => Array(4).fill(Infinity));
+  const bases = ['R', 'r', 'M'];
+  for (const b1 of bases) for (const b2 of bases) for (let n1 = 0; n1 < 4; n1++) for (let n2 = 0; n2 < 4; n2++) {
+    const a = (X_TURNS[b1][0] * n1 + X_TURNS[b2][0] * n2) % 4;
+    const b = (X_TURNS[b1][1] * n1 + X_TURNS[b2][1] * n2) % 4;
+    out[a][b] = Math.min(out[a][b], t[n1] + t[n2]);
+  }
+  return out;
+})();
+function tightXBlocks(moves, qtm = false) {
   for (let i = 0; i < moves.length;) {
     let j = i, a = 0, b = 0;
     while (j < moves.length && X_TURNS[C.MOVES[moves[j]].base]) {
@@ -388,8 +403,7 @@ function tightXBlocks(moves) {
       a = (a + ra * n) % 4; b = (b + mb * n) % 4;
       j++;
     }
-    const need = !a && !b ? 0 : !a || !b || (a + b) % 4 === 0 ? 1 : 2;
-    if (j - i > need) return false;
+    if (qtm ? blockQtm(moves.slice(i, j)) > X_QTM_MIN[a][b] : j - i > (!a && !b ? 0 : !a || !b || (a + b) % 4 === 0 ? 1 : 2)) return false;
     i = Math.max(j, i + 1);
   }
   return true;
@@ -414,22 +428,62 @@ const sqDist = (tracked, k) => getSq(k).h(getSq(k).locsFromState(tracked));
 
 // square k の解答例を短い順に 3 つ。無駄な手を含む解(途中で揃う・1 手抜いても揃う)と、
 // square のピースの動きが同じ解(r と R の違いだけなど)は 1 つにまとめる
-function sqSolutions(tracked, k) {
+function filterSols(tracked, k, list, qtm = false) {
   const done = (moves) => C.isSolvedAt(colorsOf(trackedApply(tracked, moves)), SQ_STICKERS[k]);
   const seen = new Set();
-  const sols = getSq(k).solve(tracked, { maxSolutions: 400, extra: 3 }).filter((x) => {
-    if (!tightXBlocks(x)) return false;
+  return list.filter((x) => {
+    if (!tightXBlocks(x, qtm)) return false;
     const key = blocksOf(x).map((b) => { const t = trackedApply(tracked, x.slice(0, b)); return SQ_STICKERS[k].map((i) => t.indexOf(i)).join(','); }).join('|');
     if (seen.has(key)) return false;
     seen.add(key);
     for (let i = 1; i < x.length; i++) if (done(x.slice(0, i))) return false;
     for (let i = 0; i < x.length; i++) if (done([...x.slice(0, i), ...x.slice(i + 1)])) return false;
     return true;
-  }).sort((p, q) => p.length - q.length).slice(0, 3);
+  });
+}
+
+function sqSolutions(tracked, k) {
+  const sols = filterSols(tracked, k, getSq(k).solve(tracked, { maxSolutions: 400, extra: 3 }))
+    .sort((p, q) => p.length - q.length).slice(0, 3);
   return { k, len: sols[0].length, sols };
 }
 
 // pieces: 色を付けるピースのステッカー(省略時は SB の 5 ピース)
+// QTM の最短手順。表は 90° の手だけで作るので値がそのまま QTM の距離になる。
+// 探索は 180° の手も 1 つの手(コスト 2)として使い、R2 のように表記する
+const QTM_MOVES = SB_MOVES.filter((m) => !m.endsWith('2'));
+const qtmSolvers = {};
+const getQtm = (k) => (qtmSolvers[k] ||= new BlockSolver(SQUARES[k].pieces, QTM_MOVES, [[0, 1, 2]]));
+function qtmSearch(tracked, k, { extra = 3, max = 400 } = {}) {
+  const full = getSq(k), q = getQtm(k);
+  const cost = full.moves.map((m) => (m.endsWith('2') ? 2 : 1));
+  const start = full.locsFromState(tracked);
+  const sols = [], path = [];
+  const dfs = (locs, budget, prev) => {
+    if (sols.length >= max) return;
+    const h = q.h(locs);
+    if (h > budget) return;
+    if (budget === 0) { if (h === 0) sols.push(path.map((mi) => full.moves[mi])); return; }
+    for (let mi = 0; mi < full.moves.length; mi++) {
+      if (cost[mi] > budget) continue;
+      if (prev >= 0 && full.axis[mi] === full.axis[prev] && full.baseRank[mi] <= full.baseRank[prev]) continue;
+      path.push(mi);
+      dfs(full.step(locs, mi), budget - cost[mi], mi);
+      path.pop();
+    }
+  };
+  const d = q.h(start);
+  for (let b = d; b <= d + extra && sols.length < max; b++) dfs(start, b, -1);
+  return sols;
+}
+
+// QTM で短い順に 3 つ。無駄を除く条件は HTM と同じ
+function sqSolutionsQtm(tracked, k) {
+  // 同じ QTM 手数なら手の数が少ない表記(R r より R2)を残す
+  const byLen = (p, q) => qtmLen(p) - qtmLen(q) || p.length - q.length;
+  return filterSols(tracked, k, qtmSearch(tracked, k).sort(byLen), true).slice(0, 3);
+}
+
 const sbHighlight = (tracked, pieces = SB_PIECE_STICKERS) => tracked.map((orig) => (pieces.has(orig) ? 1 : 0)).join('');
 
 // 入力した手順で square k が揃うか
@@ -483,6 +537,7 @@ function genSbSquare(opts = {}) {
       colors: colorsOf(tracked),
       highlight: sbHighlight(tracked),
       sbSols: Object.fromEntries(res.map((r) => [r.k, r.sols.map((x) => x.join(' '))])),
+      qtmSols: Object.fromEntries(res.map((r) => [r.k, sqSolutionsQtm(tracked, r.k).map((x) => x.join(' '))])),
       scramble: scramble.join(' '),
       prompt: 'squareを作る最短手数は? Front / Back はどっち?',
       choices,
@@ -530,6 +585,7 @@ function genSbSolve(opts = {}) {
       colors: colorsOf(tracked),
       highlight: sbHighlight(tracked, new Set(SQ_STICKERS[k])),
       sbSols: { [k]: r.sols.map((x) => x.join(' ')) },
+      qtmSols: { [k]: sqSolutionsQtm(tracked, k).map((x) => x.join(' ')) },
       square: k,
       optLen: len,
       inputPad: true,

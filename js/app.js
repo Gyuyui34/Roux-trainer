@@ -525,15 +525,20 @@ function settle(ok, rect, wrongMsg) {
 
 // SB の解答例: square ごとに短い順。最短の行を強調する
 function sbTable(p) {
-  const best = Math.min(...Object.values(p.sbSols).map((l) => l[0].split(' ').length));
-  const rows = Object.entries(p.sbSols).map(([k, list]) => list.map((alg, i) => {
-    const moves = alg.split(' ');
-    const top = moves.length === best;
-    return `<tr class="${top ? 'best' : ''}">${i ? '' : `<th rowspan="${list.length}" class="sq">${k === 'front' ? 'Front' : 'Back'}</th>`}
-      <td class="n">${top ? '★' : ''}${moves.length}手</td>
+  const htm = (alg) => alg.split(' ').length;
+  const qtm = (alg) => alg.split(' ').reduce((a, m) => a + (m.endsWith('2') ? 2 : 1), 0);
+  const table = (sols, count) => {
+    const best = Math.min(...Object.values(sols).map((l) => count(l[0])));
+    const rows = Object.entries(sols).map(([k, list]) => list.map((alg, i) => {
+      const n = count(alg);
+      return `<tr class="${n === best ? 'best' : ''}">${i ? '' : `<th rowspan="${list.length}" class="sq">${k === 'front' ? 'Front' : 'Back'}</th>`}
+      <td class="n">${n === best ? '★' : ''}${n}手</td>
       <td class="alg">${esc(alg)}</td></tr>`;
-  }).join('')).join('');
-  return `<table class="soltab">${rows}</table>`;
+    }).join('')).join('');
+    return `<table class="soltab">${rows}</table>`;
+  };
+  return `<div class="soltitle">HTM(180°も1手)</div>${table(p.sbSols, htm)}
+    ${p.qtmSols ? `<div class="soltitle">QTM(180°は2手)</div>${table(p.qtmSols, qtm)}` : ''}`;
 }
 
 // 入力中の手順。同じ層が続いたら R R → R2 のようにまとめて手数を数える

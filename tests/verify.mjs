@@ -1,6 +1,6 @@
 // node tests/verify.mjs : 手順表と出題生成の検証
 import * as C from '../js/cube.js';
-import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS } from '../js/drills.js';
+import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen } from '../js/drills.js';
 
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('NG:', msg); } };
@@ -120,9 +120,22 @@ for (const pos of DR_POSITIONS) {
     check(p.optLen >= 2 && p.sbSols[side][0].split(' ').length === p.optLen && solvesSquare(p.colors, side, p.sbSols[side][0]), `sbSolve DR@${pos} ${side} solution`);
   }
 }
+const sqDone = (st, k) => C.isSolvedAt(st, C.piecesStickers(SQUARES[k].pieces));
+// QTM の解答例: 揃う / HTM の解より QTM で長くない / 短い順 / 小さい手数では本当に最短
+const SB_QUARTER = ['U', "U'", 'R', "R'", 'r', "r'", 'M', "M'"];
+const shorterQ = (st, k, depth) => sqDone(st, k) || (depth > 0 && SB_QUARTER.some((m) => shorterQ(C.applyAlg(st, [m]), k, depth - 1)));
+for (let i = 0; i < 40; i++) {
+  const p = i % 2 ? generate('sbSq') : generate('sbSolve', { side: i % 4 ? 'front' : 'back', len: 2 + (i % 5) });
+  for (const [k, list] of Object.entries(p.qtmSols)) {
+    const qs = list.map((a) => qtmLen(a.split(' ')));
+    check(list.every((a) => sqDone(C.applyAlg(p.colors, a), k)), `qtm solves ${k}`);
+    check(qs.every((q, j) => !j || qs[j - 1] <= q), `qtm sorted ${qs}`);
+    check(qs[0] <= Math.min(...p.sbSols[k].map((a) => qtmLen(a.split(' ')))), `qtm <= htm-sol qtm ${k}`);
+    if (qs[0] <= 5) check(!shorterQ(p.colors, k, qs[0] - 1), `qtm optimal ${k} ${list[0]}`);
+  }
+}
 // SB square: 示した手順で square が揃う / FB は揃ったまま / 手数より短い解がない
 const SB_SET = C.expandMoveSet(['U', 'R', 'r', 'M']);
-const sqDone = (st, k) => C.isSolvedAt(st, C.piecesStickers(SQUARES[k].pieces));
 const anyShorter = (st, k, depth) => {
   if (sqDone(st, k)) return true;
   if (!depth) return false;
