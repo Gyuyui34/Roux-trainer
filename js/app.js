@@ -1,6 +1,6 @@
 import * as S from './store.js';
 import * as FX from './fx.js';
-import { generate, DRILLS, CMLL_CASES, identifyCmll, solvesCase, solvesSquare, mergeMoves, DR_POSITIONS, DR_ORIS } from './drills.js';
+import { generate, DRILLS, CMLL_CASES, identifyCmll, solvesCase, solvesSquare, mergeMoves, qtmLen, DR_POSITIONS, DR_ORIS } from './drills.js';
 import { CMLL_SETS } from './cmll.js';
 import { CubeView, ORIENTATIONS, COLOR_JA, COLOR_HEX, schemeFor } from './view3d.js';
 import { applyAlg, solved } from './cube.js';
@@ -179,7 +179,7 @@ function renderHome() {
         <select id="sblen">${SB_LENS.map((n) => `<option value="${n}" ${n === cfg.sbLen ? 'selected' : ''}>${n}手</option>`).join('')}</select></div>`}
       <div class="opt"><span class="sub">square</span>
         <div class="chips" id="sbside">${Object.entries(SQ_LABEL).map(([k, v]) => `<button class="chip ${cfg.sbSide === k ? 'on' : ''}" data-side="${k}">${v}</button>`).join('')}</div></div>
-      <div class="sub">FBだけ揃った状態から、${cfg.sbBy === 'dr' ? 'DRエッジが選んだ位置・向きにある問題を出します。EOは、DRエッジのD面の色がU/D面を向いていれば合っている、とします(FR・BRにあるときは、F/B面を向いていれば合っている)。最短手数は問題文に表示されます。' : `選んだsquareを最短${cfg.sbLen}手で作れる問題を出します。`}U' U r r' R R' のボタンを順に押して手順を入力し(R r' は M、R' r は M' に自動変換)、squareが最短手数で揃えば正解です(揃っても手数が多いと不正解)。</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
+      <div class="sub">FBだけ揃った状態から、${cfg.sbBy === 'dr' ? 'DRエッジが選んだ位置・向きにある問題を出します。EOは、DRエッジのD面の色がU/D面を向いていれば合っている、とします(FR・BRにあるときは、F/B面を向いていれば合っている)。最短手数は問題文に表示されます。' : `選んだsquareを最短${cfg.sbLen}手で作れる問題を出します。`}U' U r r' R R' のボタンを順に押して手順を入力し(R r' は M、R' r は M' に自動変換)、squareがSTMかQSTMのどちらかで最短手数で揃えば正解です(揃っても手数が多いと不正解)。</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
         <div class="row" style="gap:6px"><select id="sbmin">${SB_LENS.slice(0, -SB_GAP).map((n) => `<option value="${n}" ${n === sbMin ? 'selected' : ''}>${n}手</option>`).join('')}</select>
         <span class="sub">〜</span><select id="sbmax">${SB_LENS.slice(SB_GAP).map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
       <div class="sub">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。手数はSTM(R r U M を1手、180°も1手)で数えます。同じ手数なら両方正解です。</div>` : `
@@ -510,8 +510,8 @@ function settle(ok, rect, wrongMsg) {
   // 解答例の表まで 1 画面に収まるよう、キューブを小さくする
   fb.classList.toggle('sb', !!p.sbSols);
   if (p.sbSols) app.querySelector('#scene').classList.add('solved-view');
-  fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : wrongMsg}</div>
-    ${p.inputPad && quiz.seq.length ? `<div class="sub">入力: <span class="mono">${esc(mergeMoves(quiz.seq).join(' '))}</span>(${mergeMoves(quiz.seq).length}手 / 最短${p.optLen}手)</div>` : ''}
+  fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : wrongMsg}${ok && p.inputPad && quiz.okVia ? `<span class="via">${quiz.okVia}</span>` : ''}</div>
+    ${p.inputPad && quiz.seq.length ? seqSummary(p) : ''}
     ${p.sbSols ? '' : `<div class="sub mono">${esc(p.explain)}</div>`}</div>
     ${autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
     ${p.sbSols ? sbTable(p) : ''}
@@ -537,8 +537,8 @@ function sbTable(p) {
     }).join('')).join('');
     return `<table class="soltab">${rows}</table>`;
   };
-  return `<div class="soltitle">STM(中層・180°も1手)</div>${table(p.sbSols, htm)}
-    ${p.qtmSols ? `<div class="soltitle">QSTM(90°ごとに1手、中層も含む)</div>${table(p.qtmSols, qtm)}` : ''}`;
+  return `${p.qtmSols ? `<div class="soltitle">QSTM(90°ごとに1手、中層も含む)</div>${table(p.qtmSols, qtm)}` : ''}
+    <div class="soltitle">STM(中層・180°も1手)</div>${table(p.sbSols, htm)}`;
 }
 
 // 入力中の手順。同じ層が続いたら R R → R2 のようにまとめて手数を数える
@@ -547,7 +547,7 @@ function showSeq() {
   if (!el) return;
   const merged = mergeMoves(quiz.seq);
   el.innerHTML = quiz.seq.length
-    ? `<span class="mono">${esc(merged.join(' ') || '(打ち消し合って0手)')}</span><b>${merged.length}手</b>`
+    ? `<span class="mono">${esc(merged.join(' ') || '(打ち消し合って0手)')}</span><b>QSTM ${qtmLen(merged)} / STM ${merged.length}</b>`
     : '<span class="sub">ボタンを押して手順を入力</span>';
 }
 
@@ -556,18 +556,31 @@ function hidePad() {
   app.querySelectorAll('.pad, .padrow').forEach((el) => { el.hidden = true; });
 }
 
+// 入力した手順の手数を STM と QSTM で並べ、最短だった方に印を付ける
+function seqSummary(p) {
+  const merged = mergeMoves(quiz.seq);
+  const solved = solvesSquare(p.colors, p.square, quiz.seq);
+  const item = (name, n, opt) => `<span class="${solved && n <= opt ? 'hit' : ''}">${name} ${n}手(最短${opt}手)${solved && n <= opt ? ' ✓' : ''}</span>`;
+  return `<div class="sub seqsum">入力: <span class="mono">${esc(merged.join(' '))}</span><br>
+    ${item('QSTM', qtmLen(merged), p.qOptLen ?? '-')} ・ ${item('STM', merged.length, p.optLen)}</div>`;
+}
+
 // SB 手順入力: 入力した手順で square が揃えば正解
 function answerSeq(btn) {
   if (!quiz || quiz.answered) return;
   const p = quiz.current;
   if (!quiz.seq.length) { toast('手順を入力してください'); return; }
   quiz.answered = true;
-  // 揃っていても、まとめた手数が最短手数より多ければ不正解
+  // STM・QSTM のどちらかで最短なら正解。揃っていても両方で手数が多ければ不正解
   const solved = solvesSquare(p.colors, p.square, quiz.seq);
-  const ok = solved && mergeMoves(quiz.seq).length <= p.optLen;
+  const merged = mergeMoves(quiz.seq);
+  const stmOk = solved && merged.length <= p.optLen;
+  const qOk = solved && qtmLen(merged) <= (p.qOptLen ?? Infinity);
+  const ok = stmOk || qOk;
+  quiz.okVia = stmOk && qOk ? 'STM・QSTMの両方で最短' : stmOk ? 'STMで最短' : qOk ? 'QSTMで最短' : '';
   app.querySelector('#seq').classList.add(ok ? 'correct' : 'wrong');
   hidePad();
-  settle(ok, btn.getBoundingClientRect(), solved ? `揃いましたが最短(${p.optLen}手)ではありません` : 'squareが揃いません');
+  settle(ok, btn.getBoundingClientRect(), solved ? '揃いましたが最短ではありません' : 'squareが揃いません');
 }
 
 // 答えを見る: 正解を表示して不正解として記録する

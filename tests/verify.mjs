@@ -101,6 +101,7 @@ for (const side of ['front', 'back']) {
       check(alg.split(' ').length >= len && mergeMoves(presses).length === alg.split(' ').length, `sbSolve merge ${alg}`);
     }
     check(!solvesSquare(p.colors, side, []), 'sbSolve unsolved at start');
+    check(p.qOptLen === qtmLen(p.qtmSols[side][0].split(' ')), 'sbSolve qOptLen');
     check(p.highlight.split('').filter((x) => x === '1').length === 7, 'sbSolve highlights only the 3 square pieces');
   }
 }

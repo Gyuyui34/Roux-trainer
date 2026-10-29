@@ -580,17 +580,20 @@ function genSbSolve(opts = {}) {
     const oriOk = !opts.drOri || opts.drOri === 'any' || opts.drOri === ori;
     if (byDr ? !opts.drPos.includes(pos) || !oriOk || len < 2 : len !== (opts.len || 5)) continue;
     const r = sqSolutions(tracked, k);
+    const qSols = sqSolutionsQtm(tracked, k);
+    const qLen = qtmLen(qSols[0]);
     return {
       drill: 'sbSolve',
       colors: colorsOf(tracked),
       highlight: sbHighlight(tracked, new Set(SQ_STICKERS[k])),
       sbSols: { [k]: r.sols.map((x) => x.join(' ')) },
-      qtmSols: { [k]: sqSolutionsQtm(tracked, k).map((x) => x.join(' ')) },
+      qtmSols: { [k]: qSols.map((x) => x.join(' ')) },
+      qOptLen: qLen,
       square: k,
       optLen: len,
       inputPad: true,
       scramble: scramble.join(' '),
-      prompt: `${SQUARES[k].name}を${len}手で作る手順を入力`,
+      prompt: `${SQUARES[k].name}を最短で作る手順を入力(QSTM ${qLen}手 / STM ${len}手)`,
       drPos: pos,
       drOri: ori,
       caseKey: byDr ? `${k} DR@${pos}${ori === 'good' ? '' : '*'}` : `${k} ${len}手`,

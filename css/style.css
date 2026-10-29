@@ -254,3 +254,5 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .padbtn.sm { font: 700 14px -apple-system, sans-serif; padding: 11px 0; }
 .padbtn.ok { background: var(--accent); color: #1a1300; border-color: transparent; font-weight: 800; }
 .padbtn:disabled { opacity: .5; }
+.feedback .via { margin-left: 8px; font-size: 13px; font-weight: 800; color: var(--ok); }
+.seqsum .hit { color: var(--ok); font-weight: 800; }
