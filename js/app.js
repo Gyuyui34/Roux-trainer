@@ -346,11 +346,19 @@ function buildQuizView() {
     else endQuiz();
   };
   // AUF ランダムでは AUF と手順の両方を選んだ時点で判定する(順番は自由)
+  // 手のボタンは押した瞬間(pointerdown)に入力する。2本の指で同時に押しても両方入る
+  app.querySelector('#choices').addEventListener('pointerdown', (e) => {
+    const padEl = e.target.closest('.padbtn[data-mv]');
+    if (!padEl || !quiz || quiz.answered) return;
+    quiz.seq.push(padEl.dataset.mv);
+    FX.sfxTick();
+    showSeq();
+  });
   app.querySelector('#choices').onclick = (e) => {
     const padEl = e.target.closest('.padbtn');
+    if (padEl && padEl.dataset.mv) return;
     if (padEl && quiz && !quiz.answered) {
-      if (padEl.dataset.mv) quiz.seq.push(padEl.dataset.mv);
-      else if (padEl.id === 'padback') quiz.seq.pop();
+      if (padEl.id === 'padback') quiz.seq.pop();
       else if (padEl.id === 'padclear') quiz.seq = [];
       else if (padEl.id === 'padok') { answerSeq(padEl); return; }
       FX.sfxTick();
