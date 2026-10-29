@@ -606,28 +606,39 @@ function animPause() {
   animShow();
 }
 
+// 左右のタップは順番に積み、1手ずつ順に回す
 function animStep(dir) {
-  const a = anim, view = quiz.view;
-  if (!a.paused) animPause(); else view.stopTween();
-  const n = a.moves.length;
-  if (!view.moving) {
-    // 端では反対の端へループする
-    if (dir > 0 && a.pos >= n) { a.pos = 0; animSnap(); animShow(); return; }
-    if (dir < 0 && a.pos <= 0) { a.pos = n; animSnap(); animShow(); return; }
-    if (dir > 0) view.beginMove(a.moves[a.pos], 0);
-    else {
-      a.pos--;
-      view.setColors(a.colors[a.pos], a.marks[a.pos].join(''));
-      view.beginMove(a.moves[a.pos], 1);
+  const a = anim;
+  if (!a.paused) animPause();
+  a.queue.push(dir);
+  if (!a.stepping) animDrain();
+}
+
+async function animDrain() {
+  const a = anim, view = quiz.view, n = a.moves.length;
+  a.stepping = true;
+  while (anim === a && a.paused && a.queue.length) {
+    const dir = a.queue.shift();
+    if (!view.moving) {
+      // 端では反対の端へループする
+      if (dir > 0 && a.pos >= n) { a.pos = 0; animSnap(); animShow(); continue; }
+      if (dir < 0 && a.pos <= 0) { a.pos = n; animSnap(); animShow(); continue; }
+      if (dir > 0) view.beginMove(a.moves[a.pos], 0);
+      else {
+        a.pos--;
+        view.setColors(a.colors[a.pos], a.marks[a.pos].join(''));
+        view.beginMove(a.moves[a.pos], 1);
+      }
     }
+    if (!(await animGo(dir > 0 ? 1 : 0, Math.round(moveMs(a.moves[a.pos]) * 0.7)))) break;
   }
-  animGo(dir > 0 ? 1 : 0, Math.round(moveMs(a.moves[a.pos]) * 0.7));
+  a.stepping = false;
 }
 
 function animTap(side) {
   if (!anim) return;
   if (side) animStep(side);
-  else if (anim.paused) { anim.paused = false; animRun(); }
+  else if (anim.paused) { anim.queue = []; anim.paused = false; animRun(); }
   else animPause();
 }
 
@@ -644,7 +655,7 @@ function playAlg(alg) {
   }
   app.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => tr.classList.toggle('playing', tr.dataset.alg === alg));
   app.querySelector('#animlabel').hidden = false;
-  anim = { moves, colors, marks, pos: 0, paused: false, run: null };
+  anim = { moves, colors, marks, pos: 0, paused: false, run: null, queue: [], stepping: false };
   quiz.view.onTap = animTap;
   animSnap();
   animShow();
