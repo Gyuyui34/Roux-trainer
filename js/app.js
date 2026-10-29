@@ -553,8 +553,8 @@ function stopAnim() {
   const l = app.querySelector('#animlabel');
   if (l) l.hidden = true;
 }
-// U2 は U2' と書く(表示とアニメーションの向きだけ。中身は U2 のまま)
-const u2p = (alg) => alg.replace(/U2(?!')/g, "U2'");
+// U2・M2 は U2'・M2' と書く(表示とアニメーションの向きだけ。中身は U2・M2 のまま)
+const u2p = (alg) => alg.replace(/([UM])2(?!')/g, "$12'");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const invMove = (m) => (m.endsWith("2'") ? m.slice(0, -1) : m.endsWith("'") ? m.slice(0, -1) : m.endsWith('2') ? m : m + "'");
 const moveMs = (m) => (m.includes('2') ? 800 : 560);
