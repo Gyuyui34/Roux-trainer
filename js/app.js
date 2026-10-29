@@ -582,7 +582,7 @@ async function animGo(target, ms) {
     a.pos++;
     view.setColors(a.colors[a.pos], a.marks[a.pos].join(''));
   }
-  FX.sfxTurn(Math.max(0, a.pos - 1), target === 1 && a.pos === a.moves.length);
+  FX.sfxTurn(Math.max(0, a.pos - 1), a.moves.length);
   animShow();
   return true;
 }

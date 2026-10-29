@@ -97,8 +97,11 @@ export function floatText(text, x, y, cls = '') {
 }
 
 // 解答アニメーションで1手回し終わるたびの音: ファミコン風の矩形波(高い成分を少し削る)。
-// 手が進むほど音階(ペンタトニック)が上がり、最後の手は根音に長3度と5度を少しずつ遅らせて重ねる
-const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+// 手が進むほど音階(ドレミソラのペンタトニック)が上がり、最後の手は根音に長3度と5度を少しずつ遅らせて重ねる。
+// 最後の手がいつも同じ音(ソ, G5)になるよう、手数に合わせて始まりの音を下げる
+const PENTA = [0, 2, 4, 7, 9];
+const LAST = 8; // C4 から数えたペンタトニックの段: 8 = G5
+const pentaHz = (i) => 261.63 * Math.pow(2, (12 * Math.floor(i / 5) + PENTA[((i % 5) + 5) % 5]) / 12);
 function chip(freq, start, dur, vol) {
   if (!ctx || !enabled) return;
   const t = ctx.currentTime + start;
@@ -116,8 +119,9 @@ function chip(freq, start, dur, vol) {
   o.start(t);
   o.stop(t + dur + 0.05);
 }
-export function sfxTurn(step, last = false) {
-  const f = 523 * Math.pow(2, PENTA[Math.min(step, PENTA.length - 1)] / 12);
+export function sfxTurn(step, total) {
+  const last = step === total - 1;
+  const f = pentaHz(LAST - (total - 1 - step));
   chip(f, 0, 0.12, 0.085);
   if (last) {
     chip(f * 1.25, 0.06, 0.19, 0.057);
