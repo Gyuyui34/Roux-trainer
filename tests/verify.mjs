@@ -89,6 +89,13 @@ for (const [a, b] of [[2, 5], [3, 6], [6, 9], [2, 9], [4, 8]]) {
     check(nums.every((n) => n >= a && n <= b) && nums.includes(Number(p.caseKey.replace('手', ''))), `sbSq range ${a}-${b}: ${nums} ${p.caseKey}`);
   }
 }
+// SB 手順入力: QSTM で手数を指定すると、その QSTM 最短手数の問題が出る
+for (const side of ['front', 'back']) {
+  for (const len of [2, 6, 8, 11]) {
+    const p = generate('sbSolve', { side, len, metric: 'qstm' });
+    check(p.qOptLen === len && p.caseKey === `${side} QSTM${len}手`, `sbSolve qstm ${side} ${len}: ${p.qOptLen}`);
+  }
+}
 // SB 手順入力: 指定どおりの手数・square。180°回しをボタン 2 回で入力しても揃う
 // パッドは U U' M M' R R'。r は M' R、r' は M R' で入力する
 const PRESS = { r: ["M'", 'R'], "r'": ['M', "R'"] };

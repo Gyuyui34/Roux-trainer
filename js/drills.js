@@ -587,7 +587,10 @@ function genSbSolve(opts = {}) {
     const pos = drPosition(tracked);
     const ori = drOrientation(tracked);
     const oriOk = !opts.drOri || opts.drOri === 'any' || opts.drOri === ori;
-    if (byDr ? !opts.drPos.includes(pos) || !oriOk || len < 2 : len !== (opts.len || 5)) continue;
+    // 手数の指定は STM か QSTM(opts.metric)で数える
+    const qtm = opts.metric === 'qstm';
+    const want = qtm ? getQtm(k).h(getQtm(k).locsFromState(tracked)) : len;
+    if (byDr ? !opts.drPos.includes(pos) || !oriOk || len < 2 : want !== (opts.len || 5)) continue;
     const r = sqSolutions(tracked, k);
     const qSols = sqSolutionsQtm(tracked, k);
     const qLen = qtmLen(qSols[0]);
@@ -605,7 +608,7 @@ function genSbSolve(opts = {}) {
       prompt: `${SQUARES[k].name}を最短で作る手順を入力(QSTM ${qLen}手 / STM ${len}手)`,
       drPos: pos,
       drOri: ori,
-      caseKey: byDr ? `${k} DR@${pos}${ori === 'good' ? '' : '*'}` : `${k} ${len}手`,
+      caseKey: byDr ? `${k} DR@${pos}${ori === 'good' ? '' : '*'}` : qtm ? `${k} QSTM${qLen}手` : `${k} ${len}手`,
       explain: `${SQUARES[k].name} ${len}手 DRエッジ:${pos}(${DR_ORIS[ori]}) (${r.sols[0].join(' ')})`,
     };
   }
