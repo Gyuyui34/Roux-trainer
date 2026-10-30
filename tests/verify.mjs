@@ -207,6 +207,41 @@ for (const side of ['front', 'back']) {
   const pc = sbCatalog({ side, drPos: ['UF'], drOri: 'good', e2Pos: null, e2Ori: 'any', coPos: null, coOri: 'any' });
   check(pc.length === sbPieceCount({ side, drPos: ['UF'], drOri: 'good', e2Pos: null, e2Ori: 'any', coPos: null, coOri: 'any' }) && pc.every((c) => c.dr.pos === 'UF' && c.dr.ori === 'good'), 'sbCatalog pieces');
 }
+// EOLRb: 表の最短手数が正しい(浅いものは総当たりで確かめる)・解答例で揃う・ステッカーとの往復
+{
+  const L = await import('../js/lse.js');
+  const all = L.startStates();
+  check(L.MAX_DIST === L.MAX_LEN, `eolrb max ${L.MAX_DIST}`);
+  const brute = (cols, depth) => {
+    if (L.solvesEolrb(cols, [])) return true;
+    if (!depth) return false;
+    return L.MOVES.some((m) => brute(C.applyAlg(cols, [m]), depth - 1));
+  };
+  for (let i = 0; i < 300; i++) {
+    const x = all[Math.floor(Math.random() * all.length)];
+    const s = L.stateOf(x), cols = L.toColors(s);
+    check(JSON.stringify(L.fromColors(cols)) === JSON.stringify(s), 'eolrb roundtrip');
+    check(cols[4] === 0 || cols[31] === 0, 'eolrb U center on U/D');
+    check(C.isSolvedAt(cols, C.F2B_STICKERS), 'eolrb F2B solved');
+    for (const a of L.solutions(s, 3)) {
+      check(L.solvesEolrb(cols, a.split(' ')), 'eolrb sol solves');
+      check(qtmLen(a.split(' ')) === L.distAt(x), 'eolrb sol length');
+    }
+  }
+  for (let d = 1; d <= 4; d++) {
+    const xs = all.filter((x) => L.distAt(x) === d);
+    for (let i = 0; i < 15; i++) {
+      const cols = L.toColors(L.stateOf(xs[Math.floor(Math.random() * xs.length)]));
+      check(!brute(cols, d - 1) && brute(cols, d), `eolrb optimal d=${d}`);
+    }
+  }
+  for (const by of [{ by: 'len', len: 6 }, { by: 'pos', eo: [2], ul: ['DF', 'DB'], ur: null }]) {
+    const p = L.genEolrb(by);
+    check(p.optQ >= 1 && L.solvesEolrb(p.colors, p.eolrbSols[0].split(' ')), 'genEolrb');
+    if (by.by === 'len') check(p.optQ === 6, 'genEolrb len');
+    else check(p.eoCount === 2 && ['DF', 'DB'].includes(p.ulPos), 'genEolrb pos');
+  }
+}
 console.log('cmllEo bad-edge counts', JSON.stringify(dist));
 console.log(fail ? `${fail} failures` : 'all passed');
 process.exit(fail ? 1 : 0);
