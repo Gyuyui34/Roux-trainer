@@ -41,13 +41,14 @@ const accColor = (p) => (p >= 90 ? 'var(--ok)' : p >= 70 ? 'var(--accent)' : 'va
 
 // 練習設定(前回の設定を引き継ぐ)
 function practiceCfg() {
-  const cfg = { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, sbLen: 5, sbLenQ: 8, sbMetric: 'stm', sbSide: 'front', sbBy: 'len', sbDr: [...DR_POSITIONS], sbOri: 'any', sbE2: [...DR_POSITIONS], sbE2Ori: 'any', sbCo: [...CORNER_POSITIONS], sbCoOri: 'any', ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
+  const cfg = { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, sbLen: 5, sbLenQ: 8, sbMetric: 'stm', sbSide: 'front', sbBy: 'len', sbDr: [...DR_POSITIONS], sbOri: 'any', sbE2: [...DR_POSITIONS], sbE2Ori: 'any', sbCo: [...CORNER_POSITIONS], sbCoOri: 'any', sbPick: ['dr'], ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
   // 以前の設定で上限と下限が近すぎる場合は広げる
   if (!['any', 'good', 'bad'].includes(cfg.sbOri)) cfg.sbOri = 'any';
   if (!['any', 'good', 'bad'].includes(cfg.sbE2Ori)) cfg.sbE2Ori = 'any';
   if (!['any', ...Object.keys(CO_ORIS)].includes(cfg.sbCoOri)) cfg.sbCoOri = 'any';
   if (!Array.isArray(cfg.sbE2) || !cfg.sbE2.length) cfg.sbE2 = [...DR_POSITIONS];
   if (!Array.isArray(cfg.sbCo) || !cfg.sbCo.length) cfg.sbCo = [...CORNER_POSITIONS];
+  if (!Array.isArray(cfg.sbPick) || !cfg.sbPick.length) cfg.sbPick = ['dr'];
   if (!['stm', 'qstm'].includes(cfg.sbMetric)) cfg.sbMetric = 'stm';
   if (!(cfg.sbLenQ >= 2 && cfg.sbLenQ <= 11)) cfg.sbLenQ = 8;
   if (cfg.sbMax - cfg.sbMin < 3) { cfg.sbMin = Math.min(cfg.sbMin, 6); cfg.sbMax = cfg.sbMin + 3; }
@@ -227,11 +228,22 @@ function renderHome() {
       if (el) el.onclick = (e) => {
         const b = e.target.closest('[data-pos]');
         if (!b) return;
-        const set = new Set(cfg[key]);
-        set.has(b.dataset.pos) ? set.delete(b.dataset.pos) : set.add(b.dataset.pos);
-        if (!set.size) { toast('1つ以上選んでください'); return; }
-        update({ [key]: all.filter((p) => set.has(p)) });
+        const p = b.dataset.pos;
+        // 問わない → 全部。問わない状態から位置を押したらその位置だけ。全部外れたら問わないに戻す
+        if (p === '*') { update({ [key]: [...all] }); return; }
+        const set = cfg[key].length === all.length ? new Set() : new Set(cfg[key]);
+        set.has(p) ? set.delete(p) : set.add(p);
+        update({ [key]: set.size ? all.filter((x) => set.has(x)) : [...all] });
       };
+    };
+    const pickEl = app.querySelector('#sbpick');
+    if (pickEl) pickEl.onclick = (e) => {
+      const b = e.target.closest('[data-pick]');
+      if (!b) return;
+      const set = new Set(cfg.sbPick);
+      set.has(b.dataset.pick) ? set.delete(b.dataset.pick) : set.add(b.dataset.pick);
+      if (!set.size) { toast('1つ以上選んでください'); return; }
+      update({ sbPick: PIECE_KEYS.filter((k) => set.has(k)) });
     };
     const single = (id, key) => {
       const el = app.querySelector(id);
@@ -278,21 +290,43 @@ const SB_LENS = [2, 3, 4, 5, 6, 7, 8, 9];
 // SB手順入力の「ピースの位置と向き」: square の DR エッジ・もう一つのエッジ・コーナーそれぞれの位置(複数可)と向き
 const SQ_E2 = { front: 'FR', back: 'BR' };
 const SQ_CO = { front: 'DRF', back: 'DRB' };
-const pieceCond = (cfg) => ({ side: cfg.sbSide, drPos: cfg.sbDr, drOri: cfg.sbOri, e2Pos: cfg.sbE2, e2Ori: cfg.sbE2Ori, coPos: cfg.sbCo, coOri: cfg.sbCoOri });
+// 指定するピース(sbPick: 'dr' 'e2' 'co')だけ条件に入れる。選ばなかったピースは問わない
+const pieceCond = (cfg) => {
+  const on = (k) => cfg.sbPick.includes(k);
+  return {
+    side: cfg.sbSide,
+    drPos: on('dr') ? cfg.sbDr : DR_POSITIONS, drOri: on('dr') ? cfg.sbOri : 'any',
+    e2Pos: on('e2') ? cfg.sbE2 : null, e2Ori: on('e2') ? cfg.sbE2Ori : 'any',
+    coPos: on('co') ? cfg.sbCo : null, coOri: on('co') ? cfg.sbCoOri : 'any',
+  };
+};
+const PIECE_KEYS = ['dr', 'e2', 'co'];
+// テストの自己ベストを分ける鍵。DR だけ指定のときは以前と同じ形
+const sbPieceKey = (cfg) => {
+  const c = pieceCond(cfg);
+  const opt = (tag, pos, all, ori) => (!pos || (pos.length === all.length && ori === 'any') ? '' : ` ${tag}:${pos.join(',')} ${ori}`);
+  return `${cfg.sbSide} DR:${c.drPos.join(',')} ${c.drOri}${opt('E2', c.e2Pos, DR_POSITIONS, c.e2Ori)}${opt('C', c.coPos, CORNER_POSITIONS, c.coOri)}`;
+};
+const pieceName = (k, side) => ({ dr: 'DRエッジ', e2: `${SQ_E2[side]}エッジ`, co: `${SQ_CO[side]}コーナー` })[k];
 function pieceOpts(cfg) {
+  // 位置は「問わない」(全部)か、1つ以上を選ぶ
   const group = (title, id, list, sel, oriId, oris, ori) => `<div class="opt"><span class="sub">${title}の位置(複数可)</span>
-      <div class="chips" id="${id}">${list.map((p) => `<button class="chip ${sel.includes(p) ? 'on' : ''}" data-pos="${p}">${p}</button>`).join('')}</div></div>
+      <div class="chips" id="${id}"><button class="chip ${sel.length === list.length ? 'on' : ''}" data-pos="*">問わない</button>${list.map((p) => `<button class="chip ${sel.length < list.length && sel.includes(p) ? 'on' : ''}" data-pos="${p}">${p}</button>`).join('')}</div></div>
     <div class="opt"><span class="sub">${title}の向き</span>
       <div class="chips" id="${oriId}">${Object.entries({ any: '問わない', ...oris }).map(([k, v]) => `<button class="chip ${ori === k ? 'on' : ''}" data-ori="${k}">${v}</button>`).join('')}</div></div>`;
   const n = sbPieceCount(pieceCond(cfg));
-  return group('DRエッジ', 'sbdr', DR_POSITIONS, cfg.sbDr, 'sbori', DR_ORIS, cfg.sbOri)
-    + group(`${SQ_E2[cfg.sbSide]}エッジ`, 'sbe2', DR_POSITIONS, cfg.sbE2, 'sbe2ori', DR_ORIS, cfg.sbE2Ori)
-    + group(`${SQ_CO[cfg.sbSide]}コーナー`, 'sbco', CORNER_POSITIONS, cfg.sbCo, 'sbcoori', CO_ORIS, cfg.sbCoOri)
+  const on = (k) => cfg.sbPick.includes(k);
+  return `<div class="opt"><span class="sub">指定するピース(複数可)</span>
+      <div class="chips" id="sbpick">${PIECE_KEYS.map((k) => `<button class="chip ${on(k) ? 'on' : ''}" data-pick="${k}">${pieceName(k, cfg.sbSide)}</button>`).join('')}</div></div>`
+    + (on('dr') ? group('DRエッジ', 'sbdr', DR_POSITIONS, cfg.sbDr, 'sbori', DR_ORIS, cfg.sbOri) : '')
+    + (on('e2') ? group(pieceName('e2', cfg.sbSide), 'sbe2', DR_POSITIONS, cfg.sbE2, 'sbe2ori', DR_ORIS, cfg.sbE2Ori) : '')
+    + (on('co') ? group(pieceName('co', cfg.sbSide), 'sbco', CORNER_POSITIONS, cfg.sbCo, 'sbcoori', CO_ORIS, cfg.sbCoOri) : '')
     + `<div class="sub" id="sbcount" style="${n ? '' : 'color:var(--ng)'}">${n ? `条件に合う置き方: ${n}通り(全5184通り中、最短2手以上)` : 'この条件に合う置き方はありません。条件をゆるめてください'}</div>`;
 }
 const pieceLabel = (cfg) => {
-  const part = (name, pos, all, ori, oris) => (pos.length === all.length && ori === 'any' ? '' : `${name}:${pos.length === all.length ? '全' : pos.join(' ')}${ori === 'any' ? '' : `(${oris[ori]})`}`);
-  return [part('DR', cfg.sbDr, DR_POSITIONS, cfg.sbOri, DR_ORIS), part(SQ_E2[cfg.sbSide], cfg.sbE2, DR_POSITIONS, cfg.sbE2Ori, DR_ORIS), part(SQ_CO[cfg.sbSide], cfg.sbCo, CORNER_POSITIONS, cfg.sbCoOri, CO_ORIS)].filter(Boolean).join(' ・ ') || '位置・向き 指定なし';
+  const on = (k) => cfg.sbPick.includes(k);
+  const part = (k, name, pos, all, ori, oris) => (!on(k) || (pos.length === all.length && ori === 'any') ? '' : `${name}:${pos.length === all.length ? '位置問わず' : pos.join(' ')}${ori === 'any' ? '' : `(${oris[ori]})`}`);
+  return [part('dr', 'DR', cfg.sbDr, DR_POSITIONS, cfg.sbOri, DR_ORIS), part('e2', SQ_E2[cfg.sbSide], cfg.sbE2, DR_POSITIONS, cfg.sbE2Ori, DR_ORIS), part('co', SQ_CO[cfg.sbSide], cfg.sbCo, CORNER_POSITIONS, cfg.sbCoOri, CO_ORIS)].filter(Boolean).join(' ・ ') || '位置・向き 指定なし';
 };
 // QSTM は 180° を 2 手と数えるので長くなる(最長 11 手)
 const SB_LENS_Q = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
@@ -313,7 +347,7 @@ function startQuiz(mode) {
   if (mode === 'test' && (cfg.menu === 'sb' || cfg.menu === 'sbSolve')) {
     quiz.problems = Array.from({ length: cfg.testN }, () => generate(quiz.drill, genOpts(cfg)));
     quiz.total = cfg.testN;
-    quiz.cfgKey = cfg.menu === 'sb' ? `${cfg.sbMin}-${cfg.sbMax}手` : (cfg.sbBy === 'dr' ? `${cfg.sbSide} DR:${cfg.sbDr.join(',')} ${cfg.sbOri}${cfg.sbE2.length === DR_POSITIONS.length && cfg.sbE2Ori === 'any' ? '' : ` E2:${cfg.sbE2.join(',')} ${cfg.sbE2Ori}`}${cfg.sbCo.length === CORNER_POSITIONS.length && cfg.sbCoOri === 'any' ? '' : ` C:${cfg.sbCo.join(',')} ${cfg.sbCoOri}`}` : `${cfg.sbSide} ${cfg.sbMetric === 'qstm' ? 'QSTM' : ''}${sbLenOf(cfg)}手`);
+    quiz.cfgKey = cfg.menu === 'sb' ? `${cfg.sbMin}-${cfg.sbMax}手` : (cfg.sbBy === 'dr' ? sbPieceKey(cfg) : `${cfg.sbSide} ${cfg.sbMetric === 'qstm' ? 'QSTM' : ''}${sbLenOf(cfg)}手`);
   } else if (mode === 'test') {
     const pool = selectedCases(cfg);
     const seq = [];
