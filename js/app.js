@@ -931,8 +931,6 @@ function learnList(cfg) {
   if (!learnMemo.has(key)) learnMemo.set(key, sbCatalog(learnCond(cfg)));
   return learnMemo.get(key);
 }
-const ORI_MARK = { good: '○', bad: '×', cw: '↻', ccw: '↺' };
-const pieceCaption = (c) => `DR ${c.dr.pos}${ORI_MARK[c.dr.ori]} ・ ${SQ_E2[c.side]} ${c.e2.pos}${ORI_MARK[c.e2.ori]} ・ ${SQ_CO[c.side]} ${c.co.pos}${ORI_MARK[c.co.ori]}`;
 
 function stopLearnPlayers() {
   learnPlayers.forEach((pl) => pl.stop());
@@ -975,9 +973,9 @@ function renderLearn() {
     ${list.length ? '' : '<div class="card sub">条件に合うケースがありません。</div>'}
     ${pager('pgtop')}
     <div class="lgrid">${items.map((c, i) => `<div class="lcell" data-i="${i}"><div class="lscene"></div>
-      <div class="lcap"><b>QSTM ${c.qstm} / STM ${c.stm}</b><span>${esc(pieceCaption(c))}</span></div></div>`).join('')}</div>
+      <div class="lcap"><b>QSTM ${c.qstm} / STM ${c.stm}</b></div></div>`).join('')}</div>
     ${pager('pgbot')}
-    <div class="sub" style="text-align:center;margin-top:6px">キューブをタップすると詳しく見られます。○×はEO、↻↺はコーナーのねじれです。</div>`;
+    <div class="sub" style="text-align:center;margin-top:6px">キューブをタップすると詳しく見られます。</div>`;
   app.querySelector('#lclose').onclick = () => { closeLearnState(); render(); };
   app.querySelector('#showd').onclick = () => { setShowD(!!S.get().settings.hideD); renderLearn(); };
   app.querySelectorAll('.pager').forEach((el) => {
@@ -1014,7 +1012,6 @@ function renderLearnDetail() {
   const c = list[idx];
   const p = sbCaseProblem(c.side, c.id);
   const rec = (S.get().sbCaseStats || {})[`${c.side}#${c.id}`];
-  const row = (name, info, oris) => `<tr><th>${name}</th><td>${info.pos}</td><td>${oris[info.ori]}</td></tr>`;
   app.innerHTML = `
     <div class="quiz-top">
       <button class="x" id="lback" aria-label="一覧へ">‹</button>
@@ -1024,11 +1021,7 @@ function renderLearnDetail() {
     <div class="dbar">${showDChip()}</div>
     <div id="lscene" class="scene anim-view"></div>
     <div class="pager"><button id="lprev" ${idx ? '' : 'disabled'}>‹ 前のケース</button><button id="lnext" ${idx < list.length - 1 ? '' : 'disabled'}>次のケース ›</button></div>
-    <div class="card">
-      <table class="ptab"><tr><th></th><th>位置</th><th>向き</th></tr>
-        ${row('DRエッジ', { pos: c.dr.pos, ori: c.dr.ori }, DR_ORIS)}${row(`${SQ_E2[c.side]}エッジ`, c.e2, DR_ORIS)}${row(`${SQ_CO[c.side]}コーナー`, c.co, CO_ORIS)}</table>
-      <div class="sub" style="margin-top:8px">${rec ? `このケースの練習: ${rec.n}回 ・ 正解 ${rec.correct}回(${pct(rec.correct, rec.n)}%)` : 'このケースはまだ練習していません'}</div>
-    </div>
+    <div class="sub lrec">${rec ? `このケースの練習: ${rec.n}回 ・ 正解 ${rec.correct}回(${pct(rec.correct, rec.n)}%)` : 'このケースはまだ練習していません'}</div>
     <div class="feedback">${sbTable(p)}<div class="animhint">キューブをタップで一時停止/再生、右の余白で1手進む、左の余白で1手戻る。表の手順をタップするとその手順を再生します</div></div>
     <button class="btn primary" id="lpractice" style="margin-top:12px">このケースを練習<small>手順入力で、このケースだけをくり返し出題します</small></button>`;
   const sceneEl = app.querySelector('#lscene');

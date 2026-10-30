@@ -276,9 +276,7 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; }
 .pager button { padding: 8px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-weight: 800; }
 .pager button:disabled { opacity: .4; }
-.ptab { width: 100%; border-collapse: collapse; font-size: 14px; }
-.ptab th, .ptab td { padding: 4px 6px; border-top: 1px solid var(--line); text-align: left; }
-.ptab tr:first-child th { border-top: 0; color: var(--sub); font-size: 12px; }
-.ptab td:nth-child(2) { font: 700 14px ui-monospace, "SF Mono", Menlo, monospace; }
 .dbar { display: flex; justify-content: flex-end; margin: 4px 0 0; }
 .dbar .chip { padding: 6px 12px; font-size: 13px; }
+.lrec { text-align: center; margin: 0 0 4px; }
+.lcap { text-align: center; }
