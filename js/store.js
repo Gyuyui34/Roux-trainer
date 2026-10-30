@@ -103,8 +103,14 @@ export function openToday() {
 // ---------- 解答の記録 ----------
 const COMBO_CAP = 10;
 
-export function recordAnswer({ drill, caseKey, ok, mode, combo, problem, timeMs }) {
+export function recordAnswer({ drill, caseKey, ok, mode, combo, problem, timeMs, sbCase }) {
   const events = [];
+  // SB の square の置き方ごとの記録(学習モードの詳細で見る)
+  if (sbCase) {
+    const c = ((data.sbCaseStats ||= {})[sbCase] ||= { n: 0, correct: 0 });
+    c.n++;
+    if (ok) c.correct++;
+  }
   const d = today();
   const p = (d.practice[drill] ||= { n: 0, correct: 0, testN: 0, testCorrect: 0 });
   if (mode === 'test') { p.testN++; if (ok) p.testCorrect++; } else { p.n++; if (ok) p.correct++; }

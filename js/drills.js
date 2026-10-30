@@ -615,9 +615,70 @@ export function sbPieceCount(opts) {
   return n;
 }
 
+// ---- SB 学習モード: 条件に合うケース(square の 3 ピースの置き方)の一覧 ----
+// id は 3 ピースの位置を並べた番号(DR・コーナー・もう一つのエッジ)。条件は genSbSolve と同じ形
+export function sbCatalog(opts = {}) {
+  const k = SQUARES[opts.side] ? opts.side : 'front';
+  const stm = getSq(k).tables[0].dist, q = getQtm(k).tables[0].dist;
+  const list = [];
+  for (let e = 0; e < stm.length; e++) {
+    if (stm[e] === 255 || stm[e] < 2) continue;
+    const info = { dr: pieceInfo(EDGE_STK[Math.floor(e / 576)]), co: pieceInfo(CORNER_STK[Math.floor(e / 24) % 24]), e2: pieceInfo(EDGE_STK[e % 24]) };
+    if (opts.len) {
+      if ((opts.metric === 'qstm' ? q[e] : stm[e]) !== opts.len) continue;
+    } else if (!matchPieces(info, opts)) continue;
+    list.push({ id: e, side: k, stm: stm[e], qstm: q[e], ...info });
+  }
+  // 短い順。同じ手数なら DR・もう一つのエッジ・コーナーの位置と向きの順
+  const ord = (pos, ori) => [...DR_POSITIONS, ...CORNER_POSITIONS].indexOf(pos) * 4 + ['good', 'bad', 'cw', 'ccw'].indexOf(ori);
+  const main = opts.metric === 'qstm' ? 'qstm' : 'stm', sub = main === 'qstm' ? 'stm' : 'qstm';
+  return list.sort((a, b) => a[main] - b[main] || a[sub] - b[sub]
+    || ord(a.dr.pos, a.dr.ori) - ord(b.dr.pos, b.dr.ori) || ord(a.e2.pos, a.e2.ori) - ord(b.e2.pos, b.e2.ori) || ord(a.co.pos, a.co.ori) - ord(b.co.pos, b.co.ori));
+}
+
+// ケース id の盤面を作る。最短手順の逆を揃った状態から回し、センターが揃うよう先に M を回しておく
+// (square の 3 ピースは R 層にあるので、揃った状態での M は影響しない)
+const caseCache = new Map();
+const caseNoOf = (tracked, k) => getSq(k).locsFromState(tracked).reduce((a, v) => a * 24 + v, 0);
+export function sbCaseProblem(side, id) {
+  const k = SQUARES[side] ? side : 'front';
+  const key = `${k}:${id}`;
+  if (caseCache.has(key)) return caseCache.get(key);
+  const locs = [Math.floor(id / 576), Math.floor(id / 24) % 24, id % 24];
+  const sol = getSq(k).solveLocs(locs)[0];
+  const inv = C.invertAlg(sol);
+  const fix = ['', 'M', 'M2', "M'"].find((m) => colorsOf(trackedApply(trackedSolved(), [...parse(m), ...inv]))[4] === 0);
+  const scramble = [...parse(fix), ...inv];
+  const tracked = trackedApply(trackedSolved(), scramble);
+  const r = sqSolutions(tracked, k);
+  const qSols = sqSolutionsQtm(tracked, k);
+  const info = { dr: infoOf(tracked, 'DR'), e2: infoOf(tracked, SQ_EDGE2[k]), co: infoOf(tracked, SQ_CORNER[k]) };
+  const p = {
+    drill: 'sbSolve',
+    caseNo: id,
+    colors: colorsOf(tracked),
+    highlight: sbHighlight(tracked, new Set(SQ_STICKERS[k])),
+    sbSols: { [k]: wideLast(r.sols) },
+    qtmSols: { [k]: wideLast(qSols) },
+    qOptLen: qtmLen(qSols[0]),
+    square: k,
+    optLen: r.len,
+    inputPad: true,
+    scramble: scramble.join(' '),
+    prompt: `${SQUARES[k].name}を最短で作る手順を入力(QSTM ${qtmLen(qSols[0])}手 / STM ${r.len}手)`,
+    drPos: info.dr.pos, drOri: info.dr.ori, e2Pos: info.e2.pos, e2Ori: info.e2.ori, coPos: info.co.pos, coOri: info.co.ori,
+    caseKey: `${k} #${id}`,
+    explain: `${SQUARES[k].name} ケース#${id}`,
+  };
+  caseCache.set(key, p);
+  return p;
+}
+
 // opts.len: 最短手数を指定 / opts.drPos: DR エッジの位置(複数可)を指定。手数は 2 手以上でランダム
 function genSbSolve(opts = {}) {
   const k = SQUARES[opts.side] ? opts.side : 'front';
+  // 学習モードの「このケースを練習」: 決まったケースを出す
+  if (opts.caseNo != null) return { ...sbCaseProblem(k, opts.caseNo) };
   const byDr = Array.isArray(opts.drPos) && opts.drPos.length;
   // 条件が狭いと当たりにくいので、ピース指定のときは多めに試す(5184 通りに 1 通りでも十分見つかる回数)
   for (let attempt = 0; attempt < (byDr ? 300000 : 40000); attempt++) {
@@ -652,6 +713,7 @@ function genSbSolve(opts = {}) {
       e2Ori: info.e2.ori,
       coPos: info.co.pos,
       coOri: info.co.ori,
+      caseNo: caseNoOf(tracked, k),
       caseKey: byDr ? `${k} DR@${pos}${ori === 'good' ? '' : '*'}` : qtm ? `${k} QSTM${qLen}手` : `${k} ${len}手`,
       explain: `${SQUARES[k].name} ${len}手 DRエッジ:${pos}(${DR_ORIS[ori]}) (${r.sols[0].join(' ')})`,
     };

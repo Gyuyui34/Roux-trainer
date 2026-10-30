@@ -1,9 +1,10 @@
 import * as S from './store.js';
 import * as FX from './fx.js';
-import { generate, DRILLS, CMLL_CASES, identifyCmll, solvesCase, solvesSquare, mergeMoves, qtmLen, DR_POSITIONS, DR_ORIS, CORNER_POSITIONS, CO_ORIS, sbPieceCount } from './drills.js';
+import { generate, DRILLS, CMLL_CASES, identifyCmll, solvesCase, solvesSquare, mergeMoves, qtmLen, DR_POSITIONS, DR_ORIS, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem } from './drills.js';
 import { CMLL_SETS } from './cmll.js';
 import { CubeView, ORIENTATIONS, COLOR_JA, COLOR_HEX, schemeFor } from './view3d.js';
 import { applyAlg, solved } from './cube.js';
+import { Player, u2p, invMove } from './player.js';
 
 const app = document.getElementById('app');
 const modalRoot = document.getElementById('modal-root');
@@ -16,7 +17,7 @@ let selectedDay = S.dayKey();
 // 片手の手順で練習した記録は末尾に Oh を付けたキーで別に保存する
 const drillOf = (cfg) => {
   if (cfg.menu === 'sb') return 'sbSq';
-  if (cfg.menu === 'sbSolve') return 'sbSolve';
+  if (cfg.menu === 'sbSolve' || cfg.menu === 'sbLearn') return 'sbSolve';
   const base = cfg.kind === 'eo' ? (cfg.auf === 'random' ? 'cmllEoAuf' : 'cmllEo') : (cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
   return S.get().settings.algSlot === 'oh' ? `${base}Oh` : base;
 };
@@ -25,7 +26,7 @@ const selectedCases = (cfg) => CMLL_CASES.filter((c) => cfg.sets.includes(c.set)
 const cfgLabel = (key) => (key === 'all' ? '全ケース' : key.startsWith('cases:') ? `${key.split(',').length}ケース選択` : key);
 const baseDrill = (k) => k.replace(/Oh$/, '');
 const drillName = (k) => (DRILLS[baseDrill(k)].noSlot ? DRILLS[k].name : `${DRILLS[baseDrill(k)].name}・${k.endsWith('Oh') ? '片手' : '両手'}`);
-const MENU_LABEL = { cmll: 'CMLL', sb: 'SB 手数当て', sbSolve: 'SB 手順入力' };
+const MENU_LABEL = { cmll: 'CMLL', sb: 'SB 手数当て', sbSolve: 'SB 手順入力', sbLearn: 'SB 学習' };
 const SQ_LABEL = { front: 'Front square', back: 'Back square' };
 // 並び: U' | U | r / r' | R / R' (U' と U は縦 2 段分)
 const PAD_MOVES = ["U'", 'U', "M'", 'r', 'R', 'M', "r'", "R'"];
@@ -66,6 +67,7 @@ document.addEventListener('pointerdown', () => FX.unlockAudio(), { once: true })
 
 function switchTab(t) {
   tab = t;
+  closeLearnState();
   document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
   render();
 }
@@ -74,6 +76,7 @@ function render() {
   document.body.classList.toggle('quiz-mode', !!quiz);
   if (quiz) return;
   window.scrollTo(0, 0);
+  if (learn) { learn.detail != null ? renderLearnDetail() : renderLearn(); return; }
   if (tab === 'home') renderHome();
   if (tab === 'history') renderHistory();
   if (tab === 'settings') renderSettings();
@@ -150,7 +153,8 @@ function renderHome() {
   const setsLabel = nSel === CMLL_CASES.length ? '全ケース' : (cfg.excluded || []).some((n) => cfg.sets.includes(n.split(' ')[0])) ? `${nSel}ケース` : cfg.sets.join(' / ');
   const reviewN = d.mistakes.length;
   const isSb = cfg.menu === 'sb';
-  const isSolve = cfg.menu === 'sbSolve';
+  const isLearn = cfg.menu === 'sbLearn';
+  const isSolve = cfg.menu === 'sbSolve' || isLearn;
   const { sbMin, sbMax } = cfg;
   app.innerHTML = `
     <div class="row between" style="margin-bottom:12px">
@@ -183,7 +187,7 @@ function renderHome() {
       ${cfg.sbBy === 'dr' ? pieceOpts(cfg) : `<div class="opt"><span class="sub">最短手数</span>
         <div class="row" style="gap:6px"><div class="chips" id="sbmetric">${[['stm', 'STM'], ['qstm', 'QSTM']].map(([k, v]) => `<button class="chip ${cfg.sbMetric === k ? 'on' : ''}" data-metric="${k}">${v}</button>`).join('')}</div>
         <select id="sblen">${(cfg.sbMetric === 'qstm' ? SB_LENS_Q : SB_LENS).map((n) => `<option value="${n}" ${n === (cfg.sbMetric === 'qstm' ? cfg.sbLenQ : cfg.sbLen) ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>`}
-      <div class="sub">FBだけ揃った状態から、${cfg.sbBy === 'dr' ? 'squareの3つのピースが選んだ位置・向きにある問題を出します。エッジのEOは、基準の色(DRはD色、FRはF色、BRはB色)がU/D面を向いていれば合っている、とします(FR・BRの位置にあるときはF/B面)。コーナーはD色がU/D面なら合っていて、そうでなければD色がU/D面から外側に見て時計回り・反時計回りどちらの隣にあるかで分けます。最短手数は問題文に表示されます。' : `選んだsquareを${cfg.sbMetric === 'qstm' ? 'QSTM' : 'STM'}で最短${sbLenOf(cfg)}手で作れる問題を出します。`}U' U M' M r r' R R' のボタンを順に押して手順を入力し(M' R は r、M R' は r' に自動変換)、squareがSTMかQSTMのどちらかで最短手数で揃えば正解です(揃っても手数が多いと不正解)。</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
+      <div class="sub">FBだけ揃った状態から、${cfg.sbBy === 'dr' ? `squareの3つのピースが選んだ位置・向きにある${isLearn ? 'ケース' : '問題'}を出します。エッジのEOは、基準の色(DRはD色、FRはF色、BRはB色)がU/D面を向いていれば合っている、とします(FR・BRの位置にあるときはF/B面)。コーナーはD色がU/D面なら合っていて、そうでなければD色がU/D面から外側に見て時計回り・反時計回りどちらの隣にあるかで分けます。${isLearn ? '' : '最短手数は問題文に表示されます。'}` : `選んだsquareを${cfg.sbMetric === 'qstm' ? 'QSTM' : 'STM'}で最短${sbLenOf(cfg)}手で作れる${isLearn ? 'ケース' : '問題'}を出します。`}${isLearn ? '条件に合うケースを一覧にして、最短手順で揃うアニメーションを流します。タップするとそのケースの詳細が見られます。' : "U' U M' M r r' R R' のボタンを順に押して手順を入力し(M' R は r、M R' は r' に自動変換)、squareがSTMかQSTMのどちらかで最短手数で揃えば正解です(揃っても手数が多いと不正解)。"}</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
         <div class="row" style="gap:6px"><select id="sbmin">${SB_LENS.slice(0, -SB_GAP).map((n) => `<option value="${n}" ${n === sbMin ? 'selected' : ''}>${n}手</option>`).join('')}</select>
         <span class="sub">〜</span><select id="sbmax">${SB_LENS.slice(SB_GAP).map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
       <div class="sub">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。手数はSTM(R r U M を1手、180°も1手)で数えます。同じ手数なら両方正解です。</div>` : `
@@ -201,21 +205,25 @@ function renderHome() {
       <button class="btn" id="pickcases" style="margin:10px 0 0;padding:11px;font-size:15px">ケースを個別に選ぶ<small>選択中 ${nSel} / 42 ケース</small></button>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>`}
     </div>
-    <button class="btn primary" id="go-practice">練習スタート<small>${isSolve ? `SB 手順入力 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenOf(cfg)}手`}` : isSb ? `SB 手数当て ・ ${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
+    ${isLearn ? `<button class="btn primary" id="go-learn">ケース一覧を見る<small>SB 学習 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenOf(cfg)}手`} ・ ${learnList(cfg).length}ケース</small></button>` : `    <button class="btn primary" id="go-practice">練習スタート<small>${isSolve ? `SB 手順入力 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenOf(cfg)}手`}` : isSb ? `SB 手数当て ・ ${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
     <div class="row" style="gap:10px">
       <button class="btn blue" id="go-test" style="flex:1">⏱ テスト<small>${cfg.testN}問タイムアタック</small></button>
       <button class="btn" id="go-review" style="flex:1" ${reviewN ? '' : 'disabled'}>🔁 復習<small>間違えた問題 ${reviewN}</small></button>
     </div>
     <div class="row" style="justify-content:center;gap:8px" id="testn">
       <span class="sub">テスト問題数</span>${[10, 20, 42].map((n) => `<button class="chip ${cfg.testN === n ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}
-    </div>
+    </div>`}
   `;
   const update = (patch) => { S.setLastPractice({ ...practiceCfg(), ...patch }); renderHome(); };
   app.querySelector('#menu').onclick = (e) => { const b = e.target.closest('[data-menu]'); if (b) update({ menu: b.dataset.menu }); };
-  app.querySelector('#go-practice').onclick = () => startQuiz('practice');
-  app.querySelector('#go-test').onclick = () => startQuiz('test');
-  app.querySelector('#go-review').onclick = () => startQuiz('review');
-  app.querySelector('#testn').onclick = (e) => { const b = e.target.closest('[data-n]'); if (b) update({ testN: Number(b.dataset.n) }); };
+  if (isLearn) {
+    app.querySelector('#go-learn').onclick = () => openLearn(practiceCfg());
+  } else {
+    app.querySelector('#go-practice').onclick = () => startQuiz('practice');
+    app.querySelector('#go-test').onclick = () => startQuiz('test');
+    app.querySelector('#go-review').onclick = () => startQuiz('review');
+    app.querySelector('#testn').onclick = (e) => { const b = e.target.closest('[data-n]'); if (b) update({ testN: Number(b.dataset.n) }); };
+  }
   if (isSolve) {
     app.querySelector('#sbby').onclick = (e) => { const b = e.target.closest('[data-by]'); if (b) update({ sbBy: b.dataset.by }); };
     const lenEl = app.querySelector('#sblen');
@@ -255,7 +263,7 @@ function renderHome() {
     single('#sbori', 'sbOri');
     single('#sbe2ori', 'sbE2Ori');
     single('#sbcoori', 'sbCoOri');
-    if (cfg.sbBy === 'dr' && !sbPieceCount(pieceCond(cfg))) app.querySelectorAll('#go-practice, #go-test').forEach((b) => { b.disabled = true; });
+    if (cfg.sbBy === 'dr' && !sbPieceCount(pieceCond(cfg))) app.querySelectorAll('#go-practice, #go-test, #go-learn').forEach((b) => { b.disabled = true; });
     app.querySelector('#sbside').onclick = (e) => { const b = e.target.closest('[data-side]'); if (b) update({ sbSide: b.dataset.side }); };
     return;
   }
@@ -337,12 +345,13 @@ const algOf = (c) => algFor(c, S.get().settings.algSlot);
 
 function genOpts(cfg) {
   if (cfg.menu === 'sb') return { minLen: cfg.sbMin, maxLen: cfg.sbMax };
+  if (cfg.caseNo != null) return { side: cfg.sbSide, caseNo: cfg.caseNo };
   if (cfg.menu === 'sbSolve') return cfg.sbBy === 'dr' ? pieceCond(cfg) : { len: sbLenOf(cfg), side: cfg.sbSide, metric: cfg.sbMetric };
   return { sets: cfg.sets, only: selectedCases(cfg).map((c) => c.name), stats: cfg.weak ? (S.get().caseStats[drillOf(cfg)] || {}) : null, algOf };
 }
 
-function startQuiz(mode) {
-  const cfg = practiceCfg();
+function startQuiz(mode, override = null) {
+  const cfg = override || practiceCfg();
   quiz = { mode, cfg, drill: drillOf(cfg), idx: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, answered: false, problems: null, mistakesIds: [] };
   if (mode === 'test' && (cfg.menu === 'sb' || cfg.menu === 'sbSolve')) {
     quiz.problems = Array.from({ length: cfg.testN }, () => generate(quiz.drill, genOpts(cfg)));
@@ -582,6 +591,7 @@ function settle(ok, rect, wrongMsg) {
     drill: p.drill || quiz.drill, caseKey: p.caseKey, ok, mode: quiz.mode === 'test' ? 'test' : quiz.mode === 'review' ? 'review' : 'practice', combo: quiz.combo,
     problem: ok || quiz.mode === 'review' ? null : stored,
     timeMs: quiz.mode === 'review' ? 0 : performance.now() - quiz.shownT,
+    sbCase: p.caseNo != null && p.square ? `${p.square}#${p.caseNo}` : null,
   });
   quiz.xp += gained;
   if (quiz.mode === 'review' && ok) S.removeMistake(quiz.mistakesIds[quiz.idx]);
@@ -623,133 +633,27 @@ function settle(ok, rect, wrongMsg) {
   }
 }
 
-// 解答手順のアニメーション(層をなめらかに回し、最後まで行ったら最初からくり返す)
-// キューブ本体のタップで一時停止/再開、右の余白タップで1手進む、左の余白タップで1手戻る
-let anim = null; // {moves, colors, marks, pos(済んだ手数), paused, run}
+// 解答手順のアニメーション(player.js)。キューブ本体のタップで一時停止/再開、左右の余白で 1 手ずつ
+let player = null;
 function stopAnim() {
-  anim = null;
-  if (quiz && quiz.view) { quiz.view.cancelMove(); quiz.view.onTap = null; }
+  if (player) player.stop();
+  player = null;
+  if (quiz && quiz.view) quiz.view.onTap = null;
   const l = app.querySelector('#animlabel');
   if (l) l.hidden = true;
-}
-// U2・M2 は U2'・M2' と書く(表示とアニメーションの向きだけ。中身は U2・M2 のまま)
-const u2p = (alg) => alg.replace(/([UM])2(?!')/g, "$12'");
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const invMove = (m) => (m.endsWith("2'") ? m.slice(0, -1) : m.endsWith("'") ? m.slice(0, -1) : m.endsWith('2') ? m : m + "'");
-const moveMs = (m) => (m.includes('2') ? 800 : 560);
-
-function animShow() {
-  const a = anim, label = app.querySelector('#animlabel');
-  if (!a || !label) return;
-  const cur = quiz.view.moving ? a.pos : -1;
-  label.innerHTML = a.moves.map((m, k) => `<span class="${k === cur ? 'cur' : k < a.pos ? 'done' : ''}">${esc(m)}</span>`).join(' ')
-    + (a.paused ? ' <span class="pause">⏸</span>' : '');
-}
-// 今の手数の盤面にする(回している途中の層は戻す)
-function animSnap() {
-  quiz.view.cancelMove();
-  quiz.view.setColors(anim.colors[anim.pos], anim.marks[anim.pos].join(''));
-}
-// 回している途中の手(moves[pos])を target(1:回し切る / 0:回す前に戻す)まで動かす
-async function animGo(target, ms) {
-  const a = anim, view = quiz.view;
-  animShow();
-  const ok = await view.tween(target, ms);
-  if (!ok || anim !== a) return false;
-  view.endMove();
-  if (target === 1) {
-    a.pos++;
-    view.setColors(a.colors[a.pos], a.marks[a.pos].join(''));
-  }
-  FX.sfxTurn(Math.max(0, a.pos - 1), a.moves.length);
-  animShow();
-  return true;
-}
-
-async function animRun() {
-  const a = anim, run = {};
-  a.run = run;
-  const view = quiz.view;
-  const alive = () => anim === a && a.run === run && !a.paused;
-  while (alive()) {
-    if (a.pos >= a.moves.length) {
-      animShow();
-      await sleep(600);
-      if (!alive()) return;
-      a.pos = 0;
-      animSnap();
-      animShow();
-      await sleep(400);
-      continue;
-    }
-    if (!view.moving) view.beginMove(a.moves[a.pos]);
-    if (!(await animGo(1, moveMs(a.moves[a.pos]))) || !alive()) return;
-    await sleep(180);
-  }
-}
-
-// 一時停止。回している途中ならその角度のまま止める
-function animPause() {
-  anim.paused = true;
-  anim.run = null;
-  quiz.view.stopTween();
-  animShow();
-}
-
-// 左右のタップは順番に積み、1手ずつ順に回す
-function animStep(dir) {
-  const a = anim;
-  if (!a.paused) animPause();
-  a.queue.push(dir);
-  if (!a.stepping) animDrain();
-}
-
-async function animDrain() {
-  const a = anim, view = quiz.view, n = a.moves.length;
-  a.stepping = true;
-  while (anim === a && a.paused && a.queue.length) {
-    const dir = a.queue.shift();
-    if (!view.moving) {
-      // 端では反対の端へループする
-      if (dir > 0 && a.pos >= n) { a.pos = 0; animSnap(); animShow(); continue; }
-      if (dir < 0 && a.pos <= 0) { a.pos = n; animSnap(); animShow(); continue; }
-      if (dir > 0) view.beginMove(a.moves[a.pos], 0);
-      else {
-        a.pos--;
-        view.setColors(a.colors[a.pos], a.marks[a.pos].join(''));
-        view.beginMove(a.moves[a.pos], 1);
-      }
-    }
-    if (!(await animGo(dir > 0 ? 1 : 0, Math.round(moveMs(a.moves[a.pos]) * 0.7)))) break;
-  }
-  a.stepping = false;
-}
-
-function animTap(side) {
-  if (!anim) return;
-  if (side) animStep(side);
-  else if (anim.paused) { anim.queue = []; anim.paused = false; animRun(); }
-  else animPause();
 }
 
 function playAlg(alg) {
   if (!quiz) return;
   stopAnim();
   const p = quiz.current;
-  const moves = u2p(alg).split(' ');
-  // 盤面と色付け(highlight)を同じ手で動かす
-  const colors = [p.colors], marks = [p.highlight.split('')];
-  for (const m of alg.split(' ')) {
-    colors.push(applyAlg(colors[colors.length - 1], [m]));
-    marks.push(applyAlg(marks[marks.length - 1], [m]));
-  }
   app.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => tr.classList.toggle('playing', tr.dataset.alg === alg));
-  app.querySelector('#animlabel').hidden = false;
-  anim = { moves, colors, marks, pos: 0, paused: false, run: null, queue: [], stepping: false };
-  quiz.view.onTap = animTap;
-  animSnap();
-  animShow();
-  sleep(400).then(() => { if (anim && anim.moves === moves && !anim.paused && !anim.run) animRun(); });
+  const label = app.querySelector('#animlabel');
+  label.hidden = false;
+  const pl = new Player(quiz.view, { label }).load(p.colors, p.highlight, alg);
+  player = pl;
+  quiz.view.onTap = (side) => pl.tap(side);
+  pl.start();
 }
 
 // SB の解答例: square ごとに短い順。最短の行を強調する
@@ -998,6 +902,142 @@ function endQuiz() {
   quiz = null;
   if (q && q.mode === 'practice' && q.idx > 0) toast(`おつかれさま!${q.idx}問 ・ 正答率${pct(q.correct, q.idx)}% ・ +${q.xp} XP`);
   render();
+}
+
+// ---------------- SB 学習 ----------------
+// 条件に合うケース(square の 3 ピースの置き方)を 12 個ずつ並べ、最短手順で揃うアニメーションを流す。
+// 画面に見えているキューブだけ動かす。タップで詳細
+let learn = null; // { cfg, list, page, detail(一覧の番号 or null) }
+let learnPlayers = [];
+let learnObserver = null;
+const LEARN_PER = 12;
+const learnCond = (cfg) => (cfg.sbBy === 'dr' ? pieceCond(cfg) : { side: cfg.sbSide, len: sbLenOf(cfg), metric: cfg.sbMetric });
+const learnMemo = new Map();
+function learnList(cfg) {
+  const key = JSON.stringify(learnCond(cfg));
+  if (!learnMemo.has(key)) learnMemo.set(key, sbCatalog(learnCond(cfg)));
+  return learnMemo.get(key);
+}
+const ORI_MARK = { good: '○', bad: '×', cw: '↻', ccw: '↺' };
+const pieceCaption = (c) => `DR ${c.dr.pos}${ORI_MARK[c.dr.ori]} ・ ${SQ_E2[c.side]} ${c.e2.pos}${ORI_MARK[c.e2.ori]} ・ ${SQ_CO[c.side]} ${c.co.pos}${ORI_MARK[c.co.ori]}`;
+
+function stopLearnPlayers() {
+  learnPlayers.forEach((pl) => pl.stop());
+  learnPlayers = [];
+  if (learnObserver) learnObserver.disconnect();
+  learnObserver = null;
+}
+function closeLearnState() {
+  stopLearnPlayers();
+  learn = null;
+}
+function openLearn(cfg) {
+  learn = { cfg, list: learnList(cfg), page: 0, detail: null };
+  render();
+}
+function newLearnView(host, scale) {
+  const view = new CubeView(host, { scale });
+  const st = S.get().settings;
+  view.setScheme(st.up, st.front);
+  view.setView(...DRILLS.cmll.view);
+  return view;
+}
+
+function renderLearn() {
+  stopLearnPlayers();
+  const { cfg, list } = learn;
+  const pages = Math.max(1, Math.ceil(list.length / LEARN_PER));
+  learn.page = Math.max(0, Math.min(learn.page, pages - 1));
+  const start = learn.page * LEARN_PER;
+  const items = list.slice(start, start + LEARN_PER);
+  const cond = cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : 'STM '}${sbLenOf(cfg)}手`;
+  const pager = (id) => (pages > 1 ? `<div class="pager" id="${id}"><button data-pg="-1" ${learn.page ? '' : 'disabled'}>‹ 前へ</button><span class="sub">${learn.page + 1} / ${pages} ページ</span><button data-pg="1" ${learn.page < pages - 1 ? '' : 'disabled'}>次へ ›</button></div>` : '');
+  app.innerHTML = `
+    <div class="quiz-top">
+      <button class="x" id="lclose">✕</button>
+      <div style="text-align:center;flex:1;min-width:0"><div style="font-weight:800">SB 学習 ・ ${SQ_LABEL[cfg.sbSide]}</div><div class="sub">${esc(cond)} ・ ${list.length}ケース</div></div>
+      <div style="width:40px"></div>
+    </div>
+    ${list.length ? '' : '<div class="card sub">条件に合うケースがありません。</div>'}
+    ${pager('pgtop')}
+    <div class="lgrid">${items.map((c, i) => `<div class="lcell" data-i="${i}"><div class="lscene"></div>
+      <div class="lcap"><b>QSTM ${c.qstm} / STM ${c.stm}</b><span>${esc(pieceCaption(c))}</span></div></div>`).join('')}</div>
+    ${pager('pgbot')}
+    <div class="sub" style="text-align:center;margin-top:6px">キューブをタップすると詳しく見られます。○×はEO、↻↺はコーナーのねじれです。</div>`;
+  app.querySelector('#lclose').onclick = () => { closeLearnState(); render(); };
+  app.querySelectorAll('.pager').forEach((el) => {
+    el.onclick = (e) => { const b = e.target.closest('[data-pg]'); if (b) { learn.page += Number(b.dataset.pg); renderLearn(); window.scrollTo(0, 0); } };
+  });
+  const cells = [...app.querySelectorAll('.lcell')];
+  const entries = new Map();
+  items.forEach((c, i) => {
+    const view = newLearnView(cells[i].querySelector('.lscene'), 0.5);
+    const p = sbCaseProblem(c.side, c.id);
+    const pl = new Player(view, { sound: false }).load(p.colors, p.highlight, p.qtmSols[p.square][0]);
+    pl.paused = true;
+    learnPlayers.push(pl);
+    entries.set(cells[i], pl);
+    view.onTap = () => { learn.detail = start + i; render(); };
+    cells[i].querySelector('.lcap').onclick = view.onTap;
+  });
+  // 見えているキューブだけ動かす。始まりを少しずつずらして、全部が同時に回らないようにする
+  learnObserver = new IntersectionObserver((list2) => {
+    for (const en of list2) {
+      const pl = entries.get(en.target);
+      if (!pl) continue;
+      if (en.isIntersecting) setTimeout(() => pl.resume(), Math.random() * 700);
+      else pl.pause();
+    }
+  }, { threshold: 0.2 });
+  cells.forEach((c) => learnObserver.observe(c));
+}
+
+function renderLearnDetail() {
+  stopLearnPlayers();
+  const { cfg, list } = learn;
+  const idx = learn.detail;
+  const c = list[idx];
+  const p = sbCaseProblem(c.side, c.id);
+  const rec = (S.get().sbCaseStats || {})[`${c.side}#${c.id}`];
+  const row = (name, info, oris) => `<tr><th>${name}</th><td>${info.pos}</td><td>${oris[info.ori]}</td></tr>`;
+  app.innerHTML = `
+    <div class="quiz-top">
+      <button class="x" id="lback" aria-label="一覧へ">‹</button>
+      <div style="text-align:center;flex:1"><div style="font-weight:800">${SQ_LABEL[c.side]} ・ ケース ${idx + 1} / ${list.length}</div><div class="sub">最短 QSTM ${c.qstm}手 / STM ${c.stm}手</div></div>
+      <div style="width:40px"></div>
+    </div>
+    <div id="lscene" class="scene anim-view"></div>
+    <div class="pager"><button id="lprev" ${idx ? '' : 'disabled'}>‹ 前のケース</button><button id="lnext" ${idx < list.length - 1 ? '' : 'disabled'}>次のケース ›</button></div>
+    <div class="card">
+      <table class="ptab"><tr><th></th><th>位置</th><th>向き</th></tr>
+        ${row('DRエッジ', { pos: c.dr.pos, ori: c.dr.ori }, DR_ORIS)}${row(`${SQ_E2[c.side]}エッジ`, c.e2, DR_ORIS)}${row(`${SQ_CO[c.side]}コーナー`, c.co, CO_ORIS)}</table>
+      <div class="sub" style="margin-top:8px">${rec ? `このケースの練習: ${rec.n}回 ・ 正解 ${rec.correct}回(${pct(rec.correct, rec.n)}%)` : 'このケースはまだ練習していません'}</div>
+    </div>
+    <div class="feedback">${sbTable(p)}<div class="animhint">キューブをタップで一時停止/再生、右の余白で1手進む、左の余白で1手戻る。表の手順をタップするとその手順を再生します</div></div>
+    <button class="btn primary" id="lpractice" style="margin-top:12px">このケースを練習<small>手順入力で、このケースだけをくり返し出題します</small></button>`;
+  const sceneEl = app.querySelector('#lscene');
+  const view = newLearnView(sceneEl, 0.48);
+  const label = document.createElement('div');
+  label.className = 'anim-label';
+  sceneEl.appendChild(label);
+  const play = (alg) => {
+    stopLearnPlayers();
+    app.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => tr.classList.toggle('playing', tr.dataset.alg === alg));
+    const pl = new Player(view, { label }).load(p.colors, p.highlight, alg);
+    learnPlayers.push(pl);
+    view.onTap = (side) => pl.tap(side);
+    pl.start();
+  };
+  app.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => { tr.onclick = () => play(tr.dataset.alg); });
+  play(app.querySelector('.soltab tr[data-alg]').dataset.alg);
+  const go = (d) => { learn.detail = idx + d; renderLearnDetail(); window.scrollTo(0, 0); };
+  app.querySelector('#lback').onclick = () => { learn.page = Math.floor(idx / LEARN_PER); learn.detail = null; render(); };
+  app.querySelector('#lprev').onclick = () => go(-1);
+  app.querySelector('#lnext').onclick = () => go(1);
+  app.querySelector('#lpractice').onclick = () => {
+    stopLearnPlayers();
+    startQuiz('practice', { ...cfg, menu: 'sbSolve', sbSide: c.side, caseNo: c.id });
+  };
 }
 
 // ---------------- 記録 ----------------

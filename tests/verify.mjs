@@ -1,6 +1,6 @@
 // node tests/verify.mjs : 手順表と出題生成の検証
 import * as C from '../js/cube.js';
-import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen, CORNER_POSITIONS, CO_ORIS, sbPieceCount } from '../js/drills.js';
+import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem } from '../js/drills.js';
 
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('NG:', msg); } };
@@ -187,6 +187,25 @@ for (let i = 0; i < 60; i++) {
     check(len >= best && p.aufAnswers.includes(k) === (len === best), `sbSq ${k} answer set`);
     if (len <= 4) check(!anyShorter(p.colors, k, len - 1), `sbSq ${k} optimal`);
   }
+}
+// SB 学習: 手数ごとの一覧を合わせると 2 手以上の全ケース。各ケースの盤面は一覧の手数どおり
+for (const side of ['front', 'back']) {
+  let tot = 0, totQ = 0;
+  for (let n = 2; n <= 10; n++) tot += sbCatalog({ side, len: n, metric: 'stm' }).length;
+  for (let n = 2; n <= 11; n++) totQ += sbCatalog({ side, len: n, metric: 'qstm' }).length;
+  check(tot === 5180 && totQ === 5180, `sbCatalog ${side} total ${tot} ${totQ}`);
+  const list = sbCatalog({ side, len: 4, metric: 'qstm' });
+  check(list.every((c, i) => !i || list[i - 1].stm <= c.stm), 'sbCatalog sorted');
+  for (const c of list.slice(0, 40)) {
+    const p = sbCaseProblem(side, c.id);
+    check(p.qOptLen === c.qstm && p.optLen === c.stm && p.caseNo === c.id, `sbCaseProblem ${side}#${c.id}`);
+    check(C.isSolvedAt(p.colors, C.FB_STICKERS) && p.colors[4] === 0, 'sbCaseProblem FB/centers');
+    check(sqDone(C.applyAlg(p.colors, p.qtmSols[side][0]), side), 'sbCaseProblem solution');
+    const g = generate('sbSolve', { side, caseNo: c.id });
+    check(g.caseNo === c.id, 'genSbSolve caseNo');
+  }
+  const pc = sbCatalog({ side, drPos: ['UF'], drOri: 'good', e2Pos: null, e2Ori: 'any', coPos: null, coOri: 'any' });
+  check(pc.length === sbPieceCount({ side, drPos: ['UF'], drOri: 'good', e2Pos: null, e2Ori: 'any', coPos: null, coOri: 'any' }) && pc.every((c) => c.dr.pos === 'UF' && c.dr.ori === 'good'), 'sbCatalog pieces');
 }
 console.log('cmllEo bad-edge counts', JSON.stringify(dist));
 console.log(fail ? `${fail} failures` : 'all passed');

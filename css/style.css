@@ -265,3 +265,17 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .anim-label .cur { color: #1a1300; background: var(--accent); border-radius: 4px; padding: 0 3px; }
 .soltab tr[data-alg] { cursor: pointer; }
 .soltab tr.playing td.alg { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 3px; text-underline-offset: 4px; }
+/* SB 学習: ケース一覧 */
+.lgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+@media (min-width: 560px) { .lgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.lcell { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px 6px 8px; min-width: 0; }
+.lcell .scene { max-height: none; touch-action: pan-y; }
+.lcap { display: grid; gap: 2px; font-size: 11px; color: var(--sub); line-height: 1.4; cursor: pointer; }
+.lcap b { color: var(--text); font-size: 13px; }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; }
+.pager button { padding: 8px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-weight: 800; }
+.pager button:disabled { opacity: .4; }
+.ptab { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ptab th, .ptab td { padding: 4px 6px; border-top: 1px solid var(--line); text-align: left; }
+.ptab tr:first-child th { border-top: 0; color: var(--sub); font-size: 12px; }
+.ptab td:nth-child(2) { font: 700 14px ui-monospace, "SF Mono", Menlo, monospace; }

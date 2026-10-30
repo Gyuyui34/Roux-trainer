@@ -75,8 +75,12 @@ export class BlockSolver {
   }
 
   // tracked: 54 要素の配列 tracked[pos] = 元のステッカー番号
-  solve(tracked, { maxSolutions = 1, extra = 0, maxDepth = 14 } = {}) {
-    const locs = this.locsFromState(tracked);
+  solve(tracked, opts) {
+    return this.solveLocs(this.locsFromState(tracked), opts);
+  }
+
+  // locs: 追跡しているステッカーの位置(圧縮番号)
+  solveLocs(locs, { maxSolutions = 1, extra = 0, maxDepth = 14 } = {}) {
     const sols = [];
     const path = [];
     const start = this.h(locs);
