@@ -404,12 +404,19 @@ function buildQuizView() {
   quiz.view.setScheme(s.up, s.front);
   const tools = document.createElement('div');
   tools.className = 'view-tools';
-  tools.innerHTML = '<button data-v="top">上から</button><button data-v="reset">視点リセット</button>';
+  const sbQuiz = ['sbSq', 'sbSolve'].includes(quiz.drill) || quiz.mode === 'review';
+  tools.innerHTML = '<button data-v="top">上から</button><button data-v="reset">視点リセット</button>'
+    + (sbQuiz ? `<button data-v="d" class="dtog ${s.hideD ? '' : 'on'}">D面色</button>` : '');
   tools.addEventListener('pointerdown', (e) => e.stopPropagation());
   tools.onclick = (e) => {
     const v = e.target.dataset.v;
     if (v === 'top') quiz.view.setView(-88, 0, true);
     if (v === 'reset') quiz.view.setView(...DRILLS.cmll.view, true);
+    if (v === 'd') {
+      setShowD(!!S.get().settings.hideD);
+      e.target.classList.toggle('on', !S.get().settings.hideD);
+      if (quiz.view.colors) quiz.view.setColors(quiz.view.colors, quiz.view.highlight);
+    }
   };
   sceneEl.appendChild(tools);
   const afterLabel = document.createElement('div');

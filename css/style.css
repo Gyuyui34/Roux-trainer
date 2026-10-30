@@ -119,6 +119,7 @@ h2 { font-size: 16px; margin: 20px 0 8px; color: var(--sub); font-weight: 600; }
 .feedback.sb .scr { margin-top: 4px; }
 .view-tools { position: absolute; right: 0; bottom: 4px; display: flex; gap: 6px; }
 .view-tools button { font-size: 12px; padding: 6px 10px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); color: var(--sub); }
+.view-tools button.dtog.on { color: var(--text); border-color: var(--accent); }
 .prompt { font-weight: 700; margin: 4px 0 10px; font-size: 15px; }
 .choices { display: grid; gap: 9px; }
 .choice { text-align: left; padding: 13px 14px; border-radius: 13px; background: var(--panel); border: 2px solid var(--line); font-size: 16px;
