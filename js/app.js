@@ -10,6 +10,7 @@ const app = document.getElementById('app');
 const modalRoot = document.getElementById('modal-root');
 let tab = 'home';
 let quiz = null;
+let pendingReload = false; // 新しい版に入れ替わり、読み込み直しを待っている
 let historyTab = 'calendar';
 let selectedDay = S.dayKey();
 
@@ -75,6 +76,7 @@ function switchTab(t) {
 function render() {
   document.body.classList.toggle('quiz-mode', !!quiz);
   if (quiz) return;
+  if (pendingReload && !learn) { location.reload(); return; }
   window.scrollTo(0, 0);
   if (learn) { learn.detail != null ? renderLearnDetail() : renderLearn(); return; }
   if (tab === 'home') renderHome();
@@ -1404,8 +1406,23 @@ async function exportData() {
 FX.setSound(S.get().settings.sound);
 CubeView.hideD = !!S.get().settings.hideD;
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+// 更新の即時反映: 起動時とアプリに戻ったときに新しい版を確かめ、入れ替わったら読み込み直す。
+// 練習中・学習画面ではホームに戻るまで待つ(記録は解答ごとに保存済み)
+function reloadIfIdle() {
+  if (pendingReload && !quiz && !learn) location.reload();
+}
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update().catch(() => {});
+    });
+  }).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;
+    pendingReload = true;
+    reloadIfIdle();
+  });
 }
 render();
 if (S.openToday()) {
