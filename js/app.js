@@ -905,10 +905,10 @@ function endQuiz() {
 }
 
 function setShowD(on) {
-  S.updateSettings({ showD: on });
-  CubeView.showD = on;
+  S.updateSettings({ hideD: !on });
+  CubeView.hideD = !on;
 }
-const showDChip = () => `<button class="chip dchip ${S.get().settings.showD ? 'on' : ''}" id="showd">D面の色を表示</button>`;
+const showDChip = () => `<button class="chip dchip ${S.get().settings.hideD ? '' : 'on'}" id="showd">D面の色を表示</button>`;
 
 // ---------------- SB 学習 ----------------
 // 条件に合うケース(square の 3 ピースの置き方)を 12 個ずつ並べ、最短手順で揃うアニメーションを流す。
@@ -972,7 +972,7 @@ function renderLearn() {
     ${pager('pgbot')}
     <div class="sub" style="text-align:center;margin-top:6px">キューブをタップすると詳しく見られます。○×はEO、↻↺はコーナーのねじれです。</div>`;
   app.querySelector('#lclose').onclick = () => { closeLearnState(); render(); };
-  app.querySelector('#showd').onclick = () => { setShowD(!S.get().settings.showD); renderLearn(); };
+  app.querySelector('#showd').onclick = () => { setShowD(!!S.get().settings.hideD); renderLearn(); };
   app.querySelectorAll('.pager').forEach((el) => {
     el.onclick = (e) => { const b = e.target.closest('[data-pg]'); if (b) { learn.page += Number(b.dataset.pg); renderLearn(); window.scrollTo(0, 0); } };
   });
@@ -1041,7 +1041,7 @@ function renderLearnDetail() {
   play(app.querySelector('.soltab tr[data-alg]').dataset.alg);
   const go = (d) => { learn.detail = idx + d; renderLearnDetail(); window.scrollTo(0, 0); };
   app.querySelector('#lback').onclick = () => { learn.page = Math.floor(idx / LEARN_PER); learn.detail = null; render(); };
-  app.querySelector('#showd').onclick = () => { setShowD(!S.get().settings.showD); renderLearnDetail(); };
+  app.querySelector('#showd').onclick = () => { setShowD(!!S.get().settings.hideD); renderLearnDetail(); };
   app.querySelector('#lprev').onclick = () => go(-1);
   app.querySelector('#lnext').onclick = () => go(1);
   app.querySelector('#lpractice').onclick = () => {
@@ -1343,7 +1343,7 @@ function renderSettings() {
     <div class="card">
       <label class="set"><span>1日のノルマ(問)</span><input type="number" id="goal" min="5" max="200" step="5" value="${s.dailyGoal}" style="width:80px"></label>
       <label class="set"><span>効果音</span><input type="checkbox" id="sound" ${s.sound ? 'checked' : ''}></label>
-      <label class="set"><span>SB の3DでD面の色を表示<small class="sub" style="display:block">灰色にしているピースも D 面の色(${COLOR_JA[scheme[3]]})のステッカーだけ色を付けます</small></span><input type="checkbox" id="showd" ${s.showD ? 'checked' : ''}></label>
+      <label class="set"><span>SB の3DでD面の色を表示<small class="sub" style="display:block">オフにすると、色の付いたピースの D 面の色(${COLOR_JA[scheme[3]]})のステッカーを灰色にします</small></span><input type="checkbox" id="showd" ${s.hideD ? '' : 'checked'}></label>
       <label class="set" style="border:0"><span>正解したら自動で次へ(練習)</span><input type="checkbox" id="autonext" ${s.autoNext ? 'checked' : ''}></label>
     </div>
     <h2>データ</h2>
@@ -1402,7 +1402,7 @@ async function exportData() {
 
 // ---------------- 起動 ----------------
 FX.setSound(S.get().settings.sound);
-CubeView.showD = !!S.get().settings.showD;
+CubeView.hideD = !!S.get().settings.hideD;
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
