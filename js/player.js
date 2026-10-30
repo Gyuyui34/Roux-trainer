@@ -111,6 +111,16 @@ export class Player {
     this.show();
   }
 
+  // 止めて最初の盤面に戻す
+  rewind() {
+    if (this.dead) return;
+    this.pause();
+    this.queue = [];
+    this.pos = 0;
+    this.snap();
+    this.show();
+  }
+
   resume() {
     if (this.dead || !this.paused) return;
     this.queue = [];

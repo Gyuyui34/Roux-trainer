@@ -1007,11 +1007,11 @@ function renderLearn() {
       } else { visible.delete(pl); pl.pause(); }
     }
   }, { threshold: 0.2 });
-  // 全て停止 / 全て再生(ページを移っても続く)
+  // 全て停止(最初の盤面に戻す) / 全て再生(ページを移っても続く)
   app.querySelector('#lplay').onclick = (e) => {
     learn.paused = !learn.paused;
     e.target.textContent = learn.paused ? '▶ 全て再生' : '⏸ 全て停止';
-    if (learn.paused) learnPlayers.forEach((pl) => pl.pause());
+    if (learn.paused) learnPlayers.forEach((pl) => pl.rewind());
     else visible.forEach((pl) => pl.resume());
   };
   cells.forEach((c) => learnObserver.observe(c));
