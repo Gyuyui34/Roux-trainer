@@ -1,6 +1,6 @@
 // node tests/verify.mjs : 手順表と出題生成の検証
 import * as C from '../js/cube.js';
-import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen } from '../js/drills.js';
+import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen, CORNER_POSITIONS, CO_ORIS, sbPieceCount } from '../js/drills.js';
 
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('NG:', msg); } };
@@ -88,6 +88,29 @@ for (const [a, b] of [[2, 5], [3, 6], [6, 9], [2, 9], [4, 8]]) {
     const nums = p.choices.map((c) => Number(c.label.replace('手', '')));
     check(nums.every((n) => n >= a && n <= b) && nums.includes(Number(p.caseKey.replace('手', ''))), `sbSq range ${a}-${b}: ${nums} ${p.caseKey}`);
   }
+}
+// SB 手順入力: square のもう一つのエッジとコーナーの位置・向きの指定
+{
+  const all = sbPieceCount({ side: 'front' });
+  check(all === 5180, `piece count all ${all}`);
+  const sum = (key, list) => list.reduce((a, v) => a + sbPieceCount({ side: 'front', [key]: v }), 0);
+  check(sum('coOri', Object.keys(CO_ORIS)) === all, 'corner ori partition');
+  check(sum('coPos', CORNER_POSITIONS.map((p) => [p])) === all, 'corner pos partition');
+  check(sum('e2Pos', DR_POSITIONS.map((p) => [p])) === all, 'edge2 pos partition');
+  check(sum('e2Ori', ['good', 'bad']) === all, 'edge2 ori partition');
+  check(sbPieceCount({ side: 'front', drPos: ['FR'], e2Pos: ['FR'] }) === 0, 'impossible combo');
+  for (const side of ['front', 'back']) {
+    const c = side === 'front' ? 'DRF' : 'DRB', e = side === 'front' ? 'FR' : 'BR';
+    for (const opts of [{ coPos: ['UFR'], coOri: 'cw' }, { e2Pos: ['UB'], e2Ori: 'bad', coPos: ['DFR', 'DBR'], coOri: 'good' }, { drPos: ['DR'], drOri: 'bad', e2Pos: ['UL'], coPos: ['UBL'], coOri: 'ccw' }]) {
+      const all2 = DR_POSITIONS;
+      const p = generate('sbSolve', { side, drPos: all2, drOri: 'any', ...opts });
+      const ok = (pos, ori, v, o) => (!pos || pos.includes(v)) && (!ori || ori === o);
+      check(p.optLen >= 2 && p.square === side && ok(opts.e2Pos, opts.e2Ori, p.e2Pos, p.e2Ori) && ok(opts.coPos, opts.coOri, p.coPos, p.coOri) && ok(opts.drPos, opts.drOri, p.drPos, p.drOri), `piece cond ${side} ${JSON.stringify(opts)} → ${p.e2Pos}/${p.e2Ori} ${p.coPos}/${p.coOri}`);
+    }
+  }
+  // 時計回りの定義: UFR の位置で D 色が R 面にあれば時計回り
+  const n = sbPieceCount({ side: 'front', coPos: ['UFR'], coOri: 'cw' }), m = sbPieceCount({ side: 'front', coPos: ['UFR'], coOri: 'ccw' });
+  check(n > 0 && m > 0, 'cw/ccw both occur');
 }
 // SB 手順入力: QSTM で手数を指定すると、その QSTM 最短手数の問題が出る
 for (const side of ['front', 'back']) {

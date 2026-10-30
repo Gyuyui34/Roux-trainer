@@ -564,33 +564,73 @@ function genSbSquare(opts = {}) {
 // 指定した square を指定した手数で作る問題。手順をボタンで入力して答える
 // DR エッジが今いる場所(UF, DB など)。向きは問わない
 export const DR_POSITIONS = ['UF', 'UB', 'UL', 'UR', 'DF', 'DB', 'FR', 'BR', 'DR'];
-const DR_STICKER = C.stickerAt('DR');
-const POS_OF_STICKER = new Map(DR_POSITIONS.flatMap((n) => C.piecesStickers([n]).map((i) => [i, n])));
-const drPosition = (tracked) => POS_OF_STICKER.get(tracked.indexOf(DR_STICKER));
+// square のコーナー(DRF/DRB)が行ける位置。FB を崩さない U R r M では左側のコーナー位置には行かない
+export const CORNER_POSITIONS = ['UFR', 'UFL', 'UBR', 'UBL', 'DFR', 'DBR'];
+const POS_OF_STICKER = new Map([...DR_POSITIONS, ...CORNER_POSITIONS].flatMap((n) => C.piecesStickers([n]).map((i) => [i, n])));
 // DR エッジの EO(F/B 軸の向き)。D 色のステッカーが U/D 面にあれば合っている。
-// U/D 面に接していない FR・BR では、D 色が F/B 面にあれば合っている
+// U/D 面に接していない FR・BR では、D 色が F/B 面にあれば合っている。FR・BR エッジは F・B 色で同じように判定する
 export const DR_ORIS = { good: 'EOが合っている', bad: 'EOが合っていない' };
-function drOrientation(tracked) {
-  const at = tracked.indexOf(DR_STICKER);
-  const face = C.FACES[Math.floor(at / 9)];
-  const eSlice = ['FR', 'BR'].includes(POS_OF_STICKER.get(at));
-  return (eSlice ? face === 'F' || face === 'B' : face === 'U' || face === 'D') ? 'good' : 'bad';
+// コーナーの向き: D 色が U/D 面にあれば合っている。そうでなければ、外から見て U/D 面の隣(時計回り側か反時計回り側)
+export const CO_ORIS = { good: '向きが合っている', cw: '時計回りにねじれ', ccw: '反時計回りにねじれ' };
+
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+// ピースの基準ステッカー(エッジは DR の D・FR の F・BR の B、コーナーは D)が位置 at にあるときの、場所と向き
+function pieceInfo(at) {
+  const st = C.STICKERS[at];
+  const face = C.FACES[st.face];
+  const pos = POS_OF_STICKER.get(at);
+  if (pos.length === 2) {
+    const eSlice = st.pos[1] === 0;
+    return { pos, ori: (eSlice ? face === 'F' || face === 'B' : face === 'U' || face === 'D') ? 'good' : 'bad' };
+  }
+  if (face === 'U' || face === 'D') return { pos, ori: 'good' };
+  // 同じコーナーの U/D 面のステッカーから見て、外側から時計回りの隣にあれば cw
+  const ud = st.pos[1] > 0 ? [0, 1, 0] : [0, -1, 0];
+  return { pos, ori: dot(cross(ud, st.normal), st.pos) < 0 ? 'cw' : 'ccw' };
+}
+const SQ_EDGE2 = { front: 'FR', back: 'BR' };
+const SQ_CORNER = { front: 'DRF', back: 'DRB' };
+const infoOf = (tracked, piece) => pieceInfo(tracked.indexOf(C.stickerAt(piece)));
+
+// 位置と向きの条件: { drPos, drOri, e2Pos, e2Ori, coPos, coOri }。位置は配列(空・未指定なら問わない)、向きは 'any' なら問わない
+function matchPieces(info, opts) {
+  const ok = (i, pos, ori) => (!pos || !pos.length || pos.includes(i.pos)) && (!ori || ori === 'any' || ori === i.ori);
+  return ok(info.dr, opts.drPos, opts.drOri) && ok(info.e2, opts.e2Pos, opts.e2Ori) && ok(info.co, opts.coPos, opts.coOri);
+}
+
+// 条件に合う盤面(square の 3 ピースの置き方)が何通りあるか。最短 2 手以上だけを数える
+const EDGE_STK = [], CORNER_STK = [];
+C.STICKERS.forEach((st, i) => { const nz = st.pos.filter((v) => v !== 0).length; if (nz === 2) EDGE_STK.push(i); if (nz === 3) CORNER_STK.push(i); });
+export function sbPieceCount(opts) {
+  const k = SQUARES[opts.side] ? opts.side : 'front';
+  const { dist } = getSq(k).tables[0];
+  let n = 0;
+  for (let e = 0; e < dist.length; e++) {
+    if (dist[e] === 255 || dist[e] < 2) continue;
+    // ピース順は DR, コーナー, もう一つのエッジ
+    const info = { dr: pieceInfo(EDGE_STK[Math.floor(e / 576)]), co: pieceInfo(CORNER_STK[Math.floor(e / 24) % 24]), e2: pieceInfo(EDGE_STK[e % 24]) };
+    if (matchPieces(info, opts)) n++;
+  }
+  return n;
 }
 
 // opts.len: 最短手数を指定 / opts.drPos: DR エッジの位置(複数可)を指定。手数は 2 手以上でランダム
 function genSbSolve(opts = {}) {
   const k = SQUARES[opts.side] ? opts.side : 'front';
   const byDr = Array.isArray(opts.drPos) && opts.drPos.length;
-  for (let attempt = 0; attempt < 40000; attempt++) {
+  // 条件が狭いと当たりにくいので、ピース指定のときは多めに試す(5184 通りに 1 通りでも十分見つかる回数)
+  for (let attempt = 0; attempt < (byDr ? 300000 : 40000); attempt++) {
     const { scramble, tracked } = sbScramble();
     const len = sqDist(tracked, k);
-    const pos = drPosition(tracked);
-    const ori = drOrientation(tracked);
-    const oriOk = !opts.drOri || opts.drOri === 'any' || opts.drOri === ori;
+    const info = { dr: infoOf(tracked, 'DR'), e2: infoOf(tracked, SQ_EDGE2[k]), co: infoOf(tracked, SQ_CORNER[k]) };
+    const pos = info.dr.pos;
+    const ori = info.dr.ori;
+    const oriOk = matchPieces(info, opts);
     // 手数の指定は STM か QSTM(opts.metric)で数える
     const qtm = opts.metric === 'qstm';
     const want = qtm ? getQtm(k).h(getQtm(k).locsFromState(tracked)) : len;
-    if (byDr ? !opts.drPos.includes(pos) || !oriOk || len < 2 : want !== (opts.len || 5)) continue;
+    if (byDr ? !oriOk || len < 2 : want !== (opts.len || 5)) continue;
     const r = sqSolutions(tracked, k);
     const qSols = sqSolutionsQtm(tracked, k);
     const qLen = qtmLen(qSols[0]);
@@ -608,6 +648,10 @@ function genSbSolve(opts = {}) {
       prompt: `${SQUARES[k].name}を最短で作る手順を入力(QSTM ${qLen}手 / STM ${len}手)`,
       drPos: pos,
       drOri: ori,
+      e2Pos: info.e2.pos,
+      e2Ori: info.e2.ori,
+      coPos: info.co.pos,
+      coOri: info.co.ori,
       caseKey: byDr ? `${k} DR@${pos}${ori === 'good' ? '' : '*'}` : qtm ? `${k} QSTM${qLen}手` : `${k} ${len}手`,
       explain: `${SQUARES[k].name} ${len}手 DRエッジ:${pos}(${DR_ORIS[ori]}) (${r.sols[0].join(' ')})`,
     };
