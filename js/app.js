@@ -26,7 +26,8 @@ const drillOf = (cfg) => {
 const selectedCases = (cfg) => CMLL_CASES.filter((c) => cfg.sets.includes(c.set) && !(cfg.excluded || []).includes(c.name));
 const cfgLabel = (key) => (key === 'all' ? '全ケース' : key.startsWith('cases:') ? `${key.split(',').length}ケース選択` : key);
 const baseDrill = (k) => k.replace(/Oh$/, '');
-const drillName = (k) => (DRILLS[baseDrill(k)].noSlot ? DRILLS[k].name : `${DRILLS[baseDrill(k)].name}・${k.endsWith('Oh') ? '片手' : '両手'}`);
+// 今はないモード(記録だけ残っているもの)は名前をそのまま出す
+const drillName = (k) => (!DRILLS[baseDrill(k)] ? k : DRILLS[baseDrill(k)].noSlot ? DRILLS[k].name : `${DRILLS[baseDrill(k)].name}・${k.endsWith('Oh') ? '片手' : '両手'}`);
 const MENU_LABEL = { cmll: 'CMLL', sb: 'SB 手数当て', sbSolve: 'SB 手順入力', sbLearn: 'SB 学習' };
 const SQ_LABEL = { front: 'Front square', back: 'Back square' };
 // 並び: U' | U | r / r' | R / R' (U' と U は縦 2 段分)
@@ -41,6 +42,9 @@ const fmtTime = (ms) => {
 };
 const accColor = (p) => (p >= 90 ? 'var(--ok)' : p >= 70 ? 'var(--accent)' : 'var(--ng)');
 
+// 復習する間違い(今あるモードのものだけ)
+const liveMistakes = () => S.get().mistakes.filter((m) => DRILLS[baseDrill(m.drill)]);
+
 // 練習設定(前回の設定を引き継ぐ)
 function practiceCfg() {
   const cfg = { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, sbLen: 5, sbLenQ: 8, sbMetric: 'stm', sbSide: 'front', sbBy: 'len', sbDr: [...DR_POSITIONS], sbOri: 'any', sbE2: [...DR_POSITIONS], sbE2Ori: 'any', sbCo: [...CORNER_POSITIONS], sbCoOri: 'any', sbPick: ['dr'], ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
@@ -53,6 +57,7 @@ function practiceCfg() {
   if (!Array.isArray(cfg.sbPick) || !cfg.sbPick.length) cfg.sbPick = ['dr'];
   if (!['stm', 'qstm'].includes(cfg.sbMetric)) cfg.sbMetric = 'stm';
   if (!(cfg.sbLenQ >= 2 && cfg.sbLenQ <= 11)) cfg.sbLenQ = 8;
+  if (!MENU_LABEL[cfg.menu]) cfg.menu = 'cmll';
   if (cfg.sbMax - cfg.sbMin < 3) { cfg.sbMin = Math.min(cfg.sbMin, 6); cfg.sbMax = cfg.sbMin + 3; }
   return cfg;
 }
@@ -153,7 +158,7 @@ function renderHome() {
   const cfg = practiceCfg();
   const nSel = selectedCases(cfg).length;
   const setsLabel = nSel === CMLL_CASES.length ? '全ケース' : (cfg.excluded || []).some((n) => cfg.sets.includes(n.split(' ')[0])) ? `${nSel}ケース` : cfg.sets.join(' / ');
-  const reviewN = d.mistakes.length;
+  const reviewN = liveMistakes().length;
   const isSb = cfg.menu === 'sb';
   const isLearn = cfg.menu === 'sbLearn';
   const isSolve = cfg.menu === 'sbSolve' || isLearn;
@@ -369,7 +374,7 @@ function startQuiz(mode, override = null) {
       : (cfg.excluded || []).length ? `cases:${pool.map((c) => c.name).join(',')}` : cfg.sets.join(',');
   }
   if (mode === 'review') {
-    const ms = S.get().mistakes.slice(0, 20);
+    const ms = liveMistakes().slice(0, 20);
     quiz.problems = ms.map((m) => {
       const pr = { ...m.problem, colors: m.problem.colors.split('').map(Number) };
       // 旧形式(AUF 固定のみ)の EO 問題を読み替える
@@ -1194,7 +1199,7 @@ function histCases(body) {
 }
 
 function histReview(body) {
-  const ms = S.get().mistakes;
+  const ms = liveMistakes();
   if (!ms.length) { body.innerHTML = '<div class="empty">間違えた問題はありません 🎉</div>'; return; }
   body.innerHTML = `
     <button class="btn primary" id="rev">まとめて復習(最大20問)<small>正解すると一覧から消えます</small></button>
