@@ -971,11 +971,11 @@ function renderLearn() {
       <div style="text-align:center;flex:1;min-width:0"><div style="font-weight:800">SB 学習 ・ ${SQ_LABEL[cfg.sbSide]}</div><div class="sub">${esc(cond)} ・ ${list.length}ケース</div></div>
       <div style="width:40px"></div>
     </div>
-    <div class="dbar">${showDChip()}</div>
+    <div class="dbar"><button class="chip dchip" id="lplay">${learn.paused ? '▶ 全て再生' : '⏸ 全て停止'}</button>${showDChip()}</div>
     ${list.length ? '' : '<div class="card sub">条件に合うケースがありません。</div>'}
     ${pager('pgtop')}
     <div class="lgrid">${items.map((c, i) => `<div class="lcell" data-i="${i}"><div class="lscene"></div>
-      <div class="lcap"><b>QSTM ${c.qstm} / STM ${c.stm}</b></div></div>`).join('')}</div>
+      <div class="lcap"></div></div>`).join('')}</div>
     ${pager('pgbot')}
     <div class="sub" style="text-align:center;margin-top:6px">キューブをタップすると詳しく見られます。</div>`;
   app.querySelector('#lclose').onclick = () => { closeLearnState(); render(); };
@@ -988,7 +988,7 @@ function renderLearn() {
   items.forEach((c, i) => {
     const view = newLearnView(cells[i].querySelector('.lscene'), 0.5);
     const p = sbCaseProblem(c.side, c.id);
-    const pl = new Player(view, { sound: false }).load(p.colors, p.highlight, p.qtmSols[p.square][0]);
+    const pl = new Player(view, { sound: false, label: cells[i].querySelector('.lcap') }).load(p.colors, p.highlight, p.qtmSols[p.square][0]);
     pl.paused = true;
     learnPlayers.push(pl);
     entries.set(cells[i], pl);
@@ -996,14 +996,24 @@ function renderLearn() {
     cells[i].querySelector('.lcap').onclick = view.onTap;
   });
   // 見えているキューブだけ動かす。始まりを少しずつずらして、全部が同時に回らないようにする
+  const visible = new Set();
   learnObserver = new IntersectionObserver((list2) => {
     for (const en of list2) {
       const pl = entries.get(en.target);
       if (!pl) continue;
-      if (en.isIntersecting) setTimeout(() => pl.resume(), Math.random() * 700);
-      else pl.pause();
+      if (en.isIntersecting) {
+        visible.add(pl);
+        if (!learn.paused) setTimeout(() => { if (!learn.paused && visible.has(pl)) pl.resume(); }, Math.random() * 700);
+      } else { visible.delete(pl); pl.pause(); }
     }
   }, { threshold: 0.2 });
+  // 全て停止 / 全て再生(ページを移っても続く)
+  app.querySelector('#lplay').onclick = (e) => {
+    learn.paused = !learn.paused;
+    e.target.textContent = learn.paused ? '▶ 全て再生' : '⏸ 全て停止';
+    if (learn.paused) learnPlayers.forEach((pl) => pl.pause());
+    else visible.forEach((pl) => pl.resume());
+  };
   cells.forEach((c) => learnObserver.observe(c));
 }
 

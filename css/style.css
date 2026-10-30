@@ -271,12 +271,14 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 @media (min-width: 560px) { .lgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .lcell { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px 6px 8px; min-width: 0; }
 .lcell .scene { max-height: none; touch-action: pan-y; }
-.lcap { display: grid; gap: 2px; font-size: 11px; color: var(--sub); line-height: 1.4; cursor: pointer; }
-.lcap b { color: var(--text); font-size: 13px; }
+.lcap { line-height: 1.5; cursor: pointer; padding: 2px 0; }
 .pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; }
 .pager button { padding: 8px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-weight: 800; }
 .pager button:disabled { opacity: .4; }
-.dbar { display: flex; justify-content: flex-end; margin: 4px 0 0; }
+.dbar { display: flex; justify-content: flex-end; gap: 6px; margin: 4px 0 0; }
 .dbar .chip { padding: 6px 12px; font-size: 13px; }
 .lrec { text-align: center; margin: 0 0 4px; }
-.lcap { text-align: center; }
+.lcap { text-align: center; font: 700 13px ui-monospace, "SF Mono", Menlo, monospace; color: var(--sub); min-height: 1.4em; }
+.lcap .done { color: var(--text); }
+.lcap .pause { display: none; }
+.lcap .cur { color: #1a1300; background: var(--accent); border-radius: 4px; padding: 0 2px; }
