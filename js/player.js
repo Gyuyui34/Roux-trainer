@@ -1,5 +1,5 @@
 // 解答手順のアニメーション再生(層をなめらかに回し、最後まで行ったら最初からくり返す)
-// 一時停止すると回している途中の角度で止まる。左右の 1 手送りは順番に積んで 1 手ずつ回す
+// 一時停止(pause)は回している途中の角度で止まる(左右の 1 手送りで使う)。タップの停止/再生は最初の盤面から。左右の 1 手送りは順番に積んで 1 手ずつ回す
 import { applyAlg } from './cube.js';
 import * as FX from './fx.js';
 
@@ -155,11 +155,12 @@ export class Player {
     this.stepping = false;
   }
 
-  // キューブ本体のタップで一時停止/再開、右の余白で 1 手進む、左の余白で 1 手戻る
+  // キューブ本体のタップで停止/再生、右の余白で 1 手進む、左の余白で 1 手戻る。
+  // 停止も再生も最初の盤面から(ユーザーの決めた仕様。キューブのタップで止める機能はすべてこれに揃える)
   tap(side) {
     if (this.dead) return;
     if (side) this.step(side);
-    else if (this.paused) this.resume();
-    else this.pause();
+    else if (this.paused) { this.rewind(); this.resume(); }
+    else this.rewind();
   }
 }

@@ -622,27 +622,27 @@ function settle(ok, rect, wrongMsg) {
   // 解答例の表まで 1 画面に収まるよう、キューブを小さくする
   fb.classList.toggle('sb', !!p.sbSols);
   // 手順入力ではボタンを隠すので、アニメーションが見えるよう少しだけ小さくする
-  if (p.sbSols) app.querySelector('#scene').classList.add(p.inputPad ? 'anim-view' : 'solved-view');
+  if (p.sbSols) app.querySelector('#scene').classList.add('anim-view');
   fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : wrongMsg}${ok && p.inputPad && quiz.okVia ? `<span class="via">${quiz.okVia}</span>` : ''}</div>
     ${p.inputPad && quiz.seq.length ? seqSummary(p) : ''}
     ${p.sbSols ? '' : `<div class="sub mono">${esc(p.explain)}</div>`}</div>
     ${autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
     ${p.sbSols ? sbTable(p) : ''}
-    ${p.inputPad ? '<div class="animhint">キューブをタップで一時停止/再生、右の余白で1手進む、左の余白で1手戻る</div>' : ''}
+    ${p.sbSols ? '<div class="animhint">キューブをタップで停止/再生(どちらも最初の局面から)、右の余白で1手進む、左の余白で1手戻る</div>' : ''}
     <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(p.sbSols ? u2p(p.scramble) : p.scramble)}</div></details>`;
   if (autoNext) {
     setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, p.eoAnswers ? 1600 : 800);
   } else {
     fb.querySelector('#next').onclick = nextProblem;
   }
-  // 手順入力: 表の最初の手順を自動で流す。表の手順をタップするとその手順に切り替える
-  if (p.inputPad) {
+  // SB: 表の最初の手順を自動で流す。表の手順をタップするとその手順に切り替える
+  if (p.sbSols) {
     fb.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => { tr.onclick = () => playAlg(tr.dataset.alg); });
-    playAlg(fb.querySelector('.soltab tr[data-alg]').dataset.alg);
+    playAlg((fb.querySelector('.soltab tr.best[data-alg]') || fb.querySelector('.soltab tr[data-alg]')).dataset.alg);
   }
 }
 
-// 解答手順のアニメーション(player.js)。キューブ本体のタップで一時停止/再開、左右の余白で 1 手ずつ
+// 解答手順のアニメーション(player.js)。キューブ本体のタップで停止/再生(どちらも最初の盤面から)、左右の余白で 1 手ずつ
 let player = null;
 function stopAnim() {
   if (player) player.stop();
@@ -673,7 +673,7 @@ function sbTable(p) {
     const best = Math.min(...Object.values(sols).map((l) => count(l[0])));
     const rows = Object.entries(sols).map(([k, list]) => list.map((alg, i) => {
       const n = count(alg);
-      return `<tr class="${n === best ? 'best' : ''}" ${p.inputPad ? `data-alg="${esc(alg)}"` : ''}>${i ? '' : `<th rowspan="${list.length}" class="sq">${k === 'front' ? 'Front' : 'Back'}</th>`}
+      return `<tr class="${n === best ? 'best' : ''}" data-alg="${esc(alg)}">${i ? '' : `<th rowspan="${list.length}" class="sq">${k === 'front' ? 'Front' : 'Back'}</th>`}
       <td class="n">${n === best ? '★' : ''}${n}手</td>
       <td class="alg">${esc(u2p(alg))}</td></tr>`;
     }).join('')).join('');
@@ -1003,7 +1003,7 @@ function renderLearn() {
       if (!pl) continue;
       if (en.isIntersecting) {
         visible.add(pl);
-        if (!learn.paused) setTimeout(() => { if (!learn.paused && visible.has(pl)) pl.resume(); }, Math.random() * 700);
+        if (!learn.paused) setTimeout(() => { if (learn && !learn.paused && visible.has(pl)) pl.resume(); }, Math.random() * 700);
       } else { visible.delete(pl); pl.pause(); }
     }
   }, { threshold: 0.2 });
@@ -1034,7 +1034,7 @@ function renderLearnDetail() {
     <div id="lscene" class="scene anim-view"></div>
     <div class="pager"><button id="lprev" ${idx ? '' : 'disabled'}>‹ 前のケース</button><button id="lnext" ${idx < list.length - 1 ? '' : 'disabled'}>次のケース ›</button></div>
     <div class="sub lrec">${rec ? `このケースの練習: ${rec.n}回 ・ 正解 ${rec.correct}回(${pct(rec.correct, rec.n)}%)` : 'このケースはまだ練習していません'}</div>
-    <div class="feedback">${sbTable(p)}<div class="animhint">キューブをタップで一時停止/再生、右の余白で1手進む、左の余白で1手戻る。表の手順をタップするとその手順を再生します</div></div>
+    <div class="feedback">${sbTable(p)}<div class="animhint">キューブをタップで停止/再生(どちらも最初の局面から)、右の余白で1手進む、左の余白で1手戻る。表の手順をタップするとその手順を再生します</div></div>
     <button class="btn primary" id="lpractice" style="margin-top:12px">このケースを練習<small>手順入力で、このケースだけをくり返し出題します</small></button>`;
   const sceneEl = app.querySelector('#lscene');
   const view = newLearnView(sceneEl, 0.48);
