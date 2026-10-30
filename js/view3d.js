@@ -42,6 +42,9 @@ const ROT_SIGN = [1, -1, 1]; // 正の軸から見た時計回り → CSS の回
 const ROT_FN = ['rotateX', 'rotateY', 'rotateZ'];
 
 export class CubeView {
+  // true なら、強調表示のときも D 面の色(揃った状態で D 面にある色)のステッカーには色を付ける
+  static showD = false;
+
   constructor(host, { scale = 0.48 } = {}) {
     this.host = host;
     this.scale = scale;
@@ -96,7 +99,7 @@ export class CubeView {
     // 強調表示のときは、それ以外を同じ灰色の半透明にして裏側のステッカーを透かして見せる
     this.cube.classList.toggle('xray', !!highlight);
     colors.forEach((c, i) => {
-      const ghost = !!highlight && highlight[i] === '0';
+      const ghost = !!highlight && highlight[i] === '0' && !(CubeView.showD && c === 3);
       this.stickerEls[i].style.background = ghost ? '' : COLOR_HEX[this.scheme[c]];
       this.stickerEls[i].classList.toggle('ghost', ghost);
     });
