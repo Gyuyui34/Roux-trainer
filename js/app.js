@@ -545,7 +545,8 @@ function buildQuizView() {
   tools.className = 'view-tools';
   const sbQuiz = ['sbSq', 'sbSolve'].includes(quiz.drill) || quiz.mode === 'review';
   tools.innerHTML = '<button data-v="top">上から</button><button data-v="reset">視点リセット</button>'
-    + (sbQuiz ? `<button data-v="d" class="dtog ${s.hideD ? '' : 'on'}">D面色</button>` : '');
+    + (sbQuiz ? `<button data-v="d" class="dtog ${s.hideD ? '' : 'on'}">D面色</button>` : '')
+    + (quiz.drill === 'sbSolve' || quiz.mode === 'review' ? `<button data-v="len" class="dtog ${s.hideLen ? '' : 'on'}">手数</button>` : '');
   tools.addEventListener('pointerdown', (e) => e.stopPropagation());
   tools.onclick = (e) => {
     const v = e.target.dataset.v;
@@ -555,6 +556,12 @@ function buildQuizView() {
       setShowD(!!S.get().settings.hideD);
       e.target.classList.toggle('on', !S.get().settings.hideD);
       if (quiz.view.colors) quiz.view.setColors(quiz.view.colors, quiz.view.highlight);
+    }
+    if (v === 'len') {
+      // SB 手順入力の問題文の最短手数を見せる/隠す
+      S.updateSettings({ hideLen: !S.get().settings.hideLen });
+      e.target.classList.toggle('on', !S.get().settings.hideLen);
+      if (quiz.current) app.querySelector('#prompt').textContent = promptText(quiz.current);
     }
   };
   sceneEl.appendChild(tools);
@@ -663,7 +670,7 @@ function nextProblem() {
   quiz.view.setView(...DRILLS.cmll.view, quiz.idx > 0);
   aufRow.classList.toggle('two', rowOpts.length === 2);
   app.querySelector('#choices').classList.toggle('nums', !!p.highlight && !p.inputPad);
-  app.querySelector('#prompt').textContent = p.prompt;
+  app.querySelector('#prompt').textContent = promptText(p);
   quiz.selEdges = [];
   const afterLabel = app.querySelector('#afterlabel');
   if (afterLabel) afterLabel.hidden = true;
@@ -1077,6 +1084,9 @@ function endQuiz() {
   if (q && q.mode === 'practice' && q.idx > 0) toast(`おつかれさま!${q.idx}問 ・ 正答率${pct(q.correct, q.idx)}% ・ +${q.xp} XP`);
   render();
 }
+
+// SB 手順入力で「手数」を隠す設定のときは、問題文の最短手数(QSTM n手 / STM m手)を消す
+const promptText = (p) => (p.sbSols && p.inputPad && S.get().settings.hideLen ? p.prompt.replace(/\(QSTM \d+手 \/ STM \d+手\)/, '') : p.prompt);
 
 function setShowD(on) {
   S.updateSettings({ hideD: !on });
