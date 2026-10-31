@@ -45,7 +45,7 @@ export class CubeView {
   // true なら、強調表示で色を付けたピースでも D 面の色(揃った状態で D 面にある色)のステッカーは灰色にする
   static hideD = false;
 
-  constructor(host, { scale = 0.48 } = {}) {
+  constructor(host, { scale = 0.48, noDrag = false } = {}) {
     this.host = host;
     this.scale = scale;
     this.yaw = -35;
@@ -68,7 +68,7 @@ export class CubeView {
       this.stickerEls.push(st);
     });
     this.layout();
-    this.bindDrag();
+    if (!noDrag) this.bindDrag();
     new ResizeObserver(() => this.layout()).observe(host);
   }
 
@@ -87,8 +87,28 @@ export class CubeView {
     this.apply();
   }
 
+  // 裏側から見た小さいキューブを host の左下に重ねる。色・手のアニメ・視点の回転はこのキューブに合わせて動く
+  showBack(on) {
+    if (on && !this.back) {
+      const el = document.createElement('div');
+      el.className = 'backview';
+      el.innerHTML = '<span class="backlabel">裏</span>';
+      this.host.appendChild(el);
+      this.back = new CubeView(el, { scale: 0.56, noDrag: true });
+      this.back.scheme = this.scheme;
+      this.back.allowHideD = this.allowHideD;
+      if (this.colors) this.back.setColors(this.colors, this.highlight);
+      if (this.moving) { this.back.beginMove(this.moving.m, this.moving.progress); }
+      this.apply();
+    } else if (!on && this.back) {
+      this.back.host.remove();
+      this.back = null;
+    }
+  }
+
   setScheme(up, front) {
     this.scheme = schemeFor(up, front);
+    if (this.back) this.back.scheme = this.scheme;
     if (this.colors) this.setColors(this.colors, this.highlight);
   }
 
@@ -96,6 +116,7 @@ export class CubeView {
   setColors(colors, highlight = null) {
     this.colors = colors;
     this.highlight = highlight;
+    if (this.back) { this.back.allowHideD = this.allowHideD; this.back.setColors(colors, highlight); }
     // 強調表示のときは、それ以外を同じ灰色の半透明にして裏側のステッカーを透かして見せる
     this.cube.classList.toggle('xray', !!highlight);
     colors.forEach((c, i) => {
@@ -119,6 +140,7 @@ export class CubeView {
     const moving = this.tileEls.filter((_, i) => layers.includes(C.STICKERS[i].pos[axis]));
     moving.forEach((el) => group.appendChild(el));
     this.moving = { m, group, tiles: moving, axis, deg: ROT_SIGN[axis] * (turns === 3 ? -90 : turns * 90), progress: 0 };
+    if (this.back) this.back.beginMove(m, progress);
     this.setProgress(progress);
   }
 
@@ -127,6 +149,7 @@ export class CubeView {
     mv.progress = p;
     const e = p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2; // ease-in-out
     mv.group.style.transform = `${ROT_FN[mv.axis]}(${mv.deg * e}deg)`;
+    if (this.back && this.back.moving) this.back.setProgress(p);
   }
 
   // 今の位置から target まで動かす。1手ぶん(0→1)が ms ミリ秒。止められたら false
@@ -158,6 +181,7 @@ export class CubeView {
 
   // 回している層を元に戻す(ステッカーの色は変えない)
   endMove() {
+    if (this.back) this.back.endMove();
     const mv = this.moving;
     if (!mv) return;
     this.moving = null;
@@ -179,6 +203,13 @@ export class CubeView {
 
   apply() {
     this.cube.style.transform = `rotateX(${this.pitch}deg) rotateY(${this.yaw}deg)`;
+    // 裏側 = 反対側から見る(上下を逆にして 180° 回す)
+    if (this.back) {
+      this.back.cube.style.transition = this.cube.style.transition;
+      this.back.pitch = -this.pitch;
+      this.back.yaw = this.yaw + 180;
+      this.back.apply();
+    }
   }
 
   bindDrag() {

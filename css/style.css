@@ -117,6 +117,8 @@ h2 { font-size: 16px; margin: 20px 0 8px; color: var(--sub); font-weight: 600; }
 .feedback.sb .res { font-size: 17px; }
 .feedback.sb #next { padding: 8px 18px !important; }
 .feedback.sb .scr { margin-top: 4px; }
+.scene .backview.scene { position: absolute; left: 0; bottom: 40px; width: 28%; aspect-ratio: 1; max-height: none; pointer-events: none; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--panel) 70%, transparent); }
+.backlabel { position: absolute; left: 6px; top: 3px; font-size: 11px; color: var(--sub); }
 .view-tools { position: absolute; right: 0; bottom: 4px; display: flex; gap: 6px; }
 .view-tools button { font-size: 12px; padding: 6px 10px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); color: var(--sub); }
 .view-tools button.dtog.on { color: var(--text); border-color: var(--accent); }
