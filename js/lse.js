@@ -24,6 +24,8 @@ export function eoState(cols) {
 // 向きが悪い位置。センターが M/M' ずれのときは、M 列のエッジは U/D 色が F/B 面を向いていれば合っている
 export const badOf = (s) => s.ori.map((o, i) => (s.c % 2 && M_SLICE.includes(i) ? 1 - o : o));
 export const eoDone = (s) => badOf(s).every((b) => !b);
+// 練習の完成形: EO が揃い、U/D のセンターが U/D 面にある(手順の最後に M 列も合わせる)
+export const eoFinished = (s) => s.c % 2 === 0 && eoDone(s);
 
 // 手の作用(ステッカーの置換から作る)
 const TABLE = MOVES.map((m) => {
@@ -48,7 +50,7 @@ const dec = (x) => ({ ori: EDGE_POS.map((_, i) => ((x >> 2) >> i) & 1), c: x % 4
 // EO 完成からの幅優先探索(手の集合は逆手で閉じている)
 const DIST = new Int8Array(256).fill(-1);
 let frontier = [];
-for (let x = 0; x < 256; x++) if (eoDone(dec(x))) { DIST[x] = 0; frontier.push(x); }
+for (let x = 0; x < 256; x++) if (eoFinished(dec(x))) { DIST[x] = 0; frontier.push(x); }
 for (let d = 1; frontier.length; d++) {
   const next = [];
   for (const x of frontier) for (let mi = 0; mi < 4; mi++) {
@@ -60,11 +62,13 @@ for (let d = 1; frontier.length; d++) {
 export const distOf = (s) => DIST[enc(s)];
 export const MAX_LEN = Math.max(...DIST);
 
-// 最短手順をいくつか(同じ層の 90° が 2 回続いたら 2 とまとめて書く。U U と U' U' は同じ U2 なので 1 つにする)
+// 最短手順をいくつか(同じ層の 90° が 2 回続いたら 2 とまとめて書く。U U と U' U' は同じ U2 なので 1 つにする)。
+// 並び順(ユーザー指定): M' が多いもの → U' が多いもの。2 は ' の向きに書く(M2'・U2')ので ' 2 回と数える
+const primes = (alg, b) => alg.split(' ').reduce((a, m) => a + (m[0] !== b ? 0 : m.endsWith('2') ? 2 : m.endsWith("'") ? 1 : 0), 0);
 export function solutions(s, want = 4) {
   const out = [];
   const walk = (st, path) => {
-    if (out.length >= want * 4) return;
+    if (out.length >= 5000) return;
     const d = DIST[enc(st)];
     if (d === 0) { out.push(path.slice()); return; }
     for (let mi = 0; mi < 4; mi++) {
@@ -82,7 +86,9 @@ export function solutions(s, want = 4) {
     }
     return r.join(' ');
   };
-  return [...new Set(out.map(join))].slice(0, want);
+  return [...new Set(out.map(join))]
+    .sort((a, b) => primes(b, 'M') - primes(a, 'M') || primes(b, 'U') - primes(a, 'U'))
+    .slice(0, want);
 }
 
 // ---- 出題
@@ -103,11 +109,11 @@ export function eoCount(o) {
   return n;
 }
 
-// 色を付けるのは U/D のセンターと、LSE エッジの U/D 色のステッカーだけ
+// 色を付けるのは U/D のセンターと LSE エッジ(側面の色も)
 function highlightOf(cols) {
   const h = Array(54).fill('0');
   for (const k of CENTER_STK) if (UD_COLORS.includes(cols[k])) h[k] = '1';
-  for (let i = 0; i < 6; i++) for (const k of [UD_STK[i], SIDE_STK[i]]) if (UD_COLORS.includes(cols[k])) h[k] = '1';
+  for (let i = 0; i < 6; i++) for (const k of [UD_STK[i], SIDE_STK[i]]) h[k] = '1';
   return h.join('');
 }
 
@@ -141,8 +147,8 @@ export function genLseEo(opts = {}) {
   };
 }
 
-// 入力した手順で EO が揃うか
-export const solvesEo = (colors, moves) => eoDone(eoState(C.applyAlg(colors, moves)));
+// 入力した手順で EO が揃い、U/D センターが U/D 面にあるか
+export const solvesEo = (colors, moves) => eoFinished(eoState(C.applyAlg(colors, moves)));
 
 // 出題できる最短手数(U センターが U/D 面にある局面で現れるもの)
 export const START_LENS = Array.from({ length: MAX_LEN }, (_, i) => i + 1).filter((n) => eoCount({ by: 'len', len: n }) > 0);
