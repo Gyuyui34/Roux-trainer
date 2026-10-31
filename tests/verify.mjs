@@ -207,6 +207,23 @@ for (const side of ['front', 'back']) {
   const pc = sbCatalog({ side, drPos: ['UF'], drOri: 'good', e2Pos: null, e2Ori: 'any', coPos: null, coOri: 'any' });
   check(pc.length === sbPieceCount({ side, drPos: ['UF'], drOri: 'good', e2Pos: null, e2Ori: 'any', coPos: null, coOri: 'any' }) && pc.every((c) => c.dr.pos === 'UF' && c.dr.ori === 'good'), 'sbCatalog pieces');
 }
+// LSE EO: 表の手数が総当たりと一致・解答例で揃う・条件どおりに出る
+{
+  const L = await import('../js/lse.js');
+  const brute = (cols, depth) => L.solvesEo(cols, []) || (depth > 0 && L.MOVES.some((m) => brute(C.applyAlg(cols, [m]), depth - 1)));
+  for (const n of L.START_LENS) {
+    for (let i = 0; i < (n <= 5 ? 6 : 2); i++) {
+      const p = L.genLseEo({ by: 'len', len: n });
+      check(p && p.optQ === n, `lseEo len ${n}`);
+      check(C.isSolvedAt(p.colors, C.F2B_STICKERS) && (p.colors[4] === 0 || p.colors[31] === 0), 'lseEo start');
+      for (const a of p.lseSols) check(L.solvesEo(p.colors, a.split(' ')) && qtmLen(a.split(' ')) === n, `lseEo sol ${a}`);
+      if (n <= 6) check(!brute(p.colors, n - 1), `lseEo optimal ${n}`);
+      check(L.solvesEo(C.applyAlg(C.solved(), p.scramble.split(' ')), p.lseSols[0].split(' ')), 'lseEo scramble');
+    }
+  }
+  const p = L.genLseEo({ by: 'pos', counts: [4], pos: { UF: 'bad', DB: 'good' } });
+  check(p.badPos.length === 4 && p.badPos.includes('UF') && !p.badPos.includes('DB'), `lseEo pos ${p.badPos}`);
+}
 console.log('cmllEo bad-edge counts', JSON.stringify(dist));
 console.log(fail ? `${fail} failures` : 'all passed');
 process.exit(fail ? 1 : 0);
