@@ -109,10 +109,10 @@ export function eoCount(o) {
   return n;
 }
 
-// 色を付けるのは U/D のセンターと LSE エッジ(側面の色も)
+// 色を付けるのは M 列のセンター(U/D/F/B)と LSE エッジ(側面の色も)
 function highlightOf(cols) {
   const h = Array(54).fill('0');
-  for (const k of CENTER_STK) if (UD_COLORS.includes(cols[k])) h[k] = '1';
+  for (const k of CENTER_STK) h[k] = '1';
   for (let i = 0; i < 6; i++) for (const k of [UD_STK[i], SIDE_STK[i]]) h[k] = '1';
   return h.join('');
 }
