@@ -523,39 +523,44 @@ const wideLast = (sols) => [...new Set(sols.map((x) => {
   return (m && m[0] === 'R' ? [...x.slice(0, -1), 'r' + m.slice(1)] : x).join(' ');
 }))];
 
+// opts.metric === 'qstm' なら手数を QSTM(90° ごとに 1 手)で数える
+const sqQDist = (tracked, k) => getQtm(k).h(getQtm(k).locsFromState(tracked));
 function genSbSquare(opts = {}) {
+  const qstm = opts.metric === 'qstm';
+  const dist = qstm ? sqQDist : sqDist;
   const minLen = Math.max(2, opts.minLen || 2), maxLen = Math.max(minLen, opts.maxLen || 99);
-  for (let attempt = 0; attempt < 20000; attempt++) {
+  for (let attempt = 0; attempt < 40000; attempt++) {
     const { scramble, tracked } = sbScramble();
     // 表の値がそのまま最短手数なので、範囲外の盤面は解を探す前に捨てる
-    const d = Math.min(...Object.keys(SQUARES).map((k) => sqDist(tracked, k)));
-    if (d < minLen || d > maxLen) continue;
-    const res = Object.keys(SQUARES).map((k) => sqSolutions(tracked, k));
-    const best = Math.min(...res.map((r) => r.len));
-    if (best < 2) continue;
-    const squares = res.filter((r) => r.len === best).map((r) => r.k);
+    const lens = Object.fromEntries(Object.keys(SQUARES).map((k) => [k, dist(tracked, k)]));
+    const best = Math.min(...Object.values(lens));
+    if (best < minLen || best > maxLen || best < 2) continue;
+    const res = Object.keys(SQUARES).map((k) => ({ ...sqSolutions(tracked, k), qlen: sqQDist(tracked, k) }));
+    const squares = Object.keys(SQUARES).filter((k) => lens[k] === best);
     // 選択肢: 正解の前後の手数から 4 つ(小さい順)
     // 選択肢の 4 つも出題範囲(下限〜上限)に収める
     const hiCap = Math.max(minLen, (opts.maxLen || best + 3) - 3);
     const lo = Math.min(Math.max(minLen, best - Math.floor(Math.random() * 4)), hiCap, best);
     const nums = [lo, lo + 1, lo + 2, lo + 3];
     const choices = nums.map((n) => ({ label: `${n}手` }));
-    const fmt = (r) => `${SQUARES[r.k].name} ${r.len}手 (${r.sols[0].join(' ')})`;
+    const qsols = Object.fromEntries(res.map((r) => [r.k, wideLast(sqSolutionsQtm(tracked, r.k))]));
+    const fmt = (r) => (qstm ? `${SQUARES[r.k].name} ${r.qlen}手 (${qsols[r.k][0]})` : `${SQUARES[r.k].name} ${r.len}手 (${r.sols[0].join(' ')})`);
     return {
       drill: 'sbSq',
       colors: colorsOf(tracked),
       highlight: sbHighlight(tracked),
       sbSols: Object.fromEntries(res.map((r) => [r.k, wideLast(r.sols)])),
-      qtmSols: Object.fromEntries(res.map((r) => [r.k, wideLast(sqSolutionsQtm(tracked, r.k))])),
+      qtmSols: qsols,
       scramble: scramble.join(' '),
-      prompt: 'squareを作る最短手数は? Front / Back はどっち?',
+      prompt: `squareを作る最短手数${qstm ? '(QSTM)' : ''}は? Front / Back はどっち?`,
       choices,
       answer: nums.indexOf(best),
       rowOpts: Object.entries(SQUARES).map(([k, v]) => [k, v.name]),
       rowName: 'square',
       aufAnswers: squares,
-      caseKey: `${best}手`,
-      explain: `最短 ${best}手(${squares.map((k) => SQUARES[k].name).join(' / ')})。${res.map(fmt).join('、')}`,
+      caseKey: qstm ? `QSTM${best}手` : `${best}手`,
+      metric: qstm ? 'qstm' : 'stm',
+      explain: `最短 ${qstm ? 'QSTM ' : ''}${best}手(${squares.map((k) => SQUARES[k].name).join(' / ')})。${res.map(fmt).join('、')}`,
     };
   }
   throw new Error('問題を生成できませんでした');
@@ -742,4 +747,4 @@ export function generate(drill, opts = {}) {
   return DRILLS[drill].gen(opts);
 }
 
-export const _internal = { eoDone, solveEo, getFb, getSb };
+export const _internal = { eoDone, solveEo, getFb, getSb, getQtm };

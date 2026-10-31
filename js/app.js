@@ -49,7 +49,7 @@ const liveMistakes = () => S.get().mistakes.filter((m) => DRILLS[baseDrill(m.dri
 
 // 練習設定(前回の設定を引き継ぐ)
 function practiceCfg() {
-  const cfg = { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, sbLen: 5, sbLenQ: 8, sbMetric: 'stm', sbSide: 'front', sbBy: 'len', sbDr: [...DR_POSITIONS], sbOri: 'any', sbE2: [...DR_POSITIONS], sbE2Ori: 'any', sbCo: [...CORNER_POSITIONS], sbCoOri: 'any', sbPick: ['dr'], eoBy: 'len', eoLen: 5, eoCounts: [...BAD_COUNTS], eoPos: {}, ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
+  const cfg = { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, sbMinQ: 2, sbMaxQ: 11, sbSqMetric: 'stm', sbLen: 5, sbLenQ: 8, sbMetric: 'stm', sbSide: 'front', sbBy: 'len', sbDr: [...DR_POSITIONS], sbOri: 'any', sbE2: [...DR_POSITIONS], sbE2Ori: 'any', sbCo: [...CORNER_POSITIONS], sbCoOri: 'any', sbPick: ['dr'], eoBy: 'len', eoLen: 5, eoCounts: [...BAD_COUNTS], eoPos: {}, ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
   // 以前の設定で上限と下限が近すぎる場合は広げる
   if (!['any', 'good', 'bad'].includes(cfg.sbOri)) cfg.sbOri = 'any';
   if (!['any', 'good', 'bad'].includes(cfg.sbE2Ori)) cfg.sbE2Ori = 'any';
@@ -65,6 +65,8 @@ function practiceCfg() {
   if (!Array.isArray(cfg.eoCounts) || !cfg.eoCounts.length) cfg.eoCounts = [...BAD_COUNTS];
   if (!cfg.eoPos || typeof cfg.eoPos !== 'object') cfg.eoPos = {};
   if (cfg.sbMax - cfg.sbMin < 3) { cfg.sbMin = Math.min(cfg.sbMin, 6); cfg.sbMax = cfg.sbMin + 3; }
+  if (!['stm', 'qstm'].includes(cfg.sbSqMetric)) cfg.sbSqMetric = 'stm';
+  if (!(cfg.sbMinQ >= 2 && cfg.sbMaxQ <= 11 && cfg.sbMaxQ - cfg.sbMinQ >= 3)) { cfg.sbMinQ = 2; cfg.sbMaxQ = 11; }
   return cfg;
 }
 
@@ -169,7 +171,10 @@ function renderHome() {
   const isLearn = cfg.menu === 'sbLearn';
   const isSolve = cfg.menu === 'sbSolve' || isLearn;
   const isEo = cfg.menu === 'lseEo';
-  const { sbMin, sbMax } = cfg;
+  // SB 手数当ての範囲は STM と QSTM で別々に覚える
+  const sqQ = cfg.sbSqMetric === 'qstm';
+  const sbMin = sqQ ? cfg.sbMinQ : cfg.sbMin, sbMax = sqQ ? cfg.sbMaxQ : cfg.sbMax;
+  const sqLens = sqQ ? SB_LENS_Q : SB_LENS;
   app.innerHTML = `
     <div class="row between" style="margin-bottom:12px">
       <div class="row"><div class="lvl"><span>Lv</span><b>${lv.level}</b></div>
@@ -202,9 +207,10 @@ function renderHome() {
         <div class="row" style="gap:6px"><div class="chips" id="sbmetric">${[['stm', 'STM'], ['qstm', 'QSTM']].map(([k, v]) => `<button class="chip ${cfg.sbMetric === k ? 'on' : ''}" data-metric="${k}">${v}</button>`).join('')}</div>
         <select id="sblen">${(cfg.sbMetric === 'qstm' ? SB_LENS_Q : SB_LENS).map((n) => `<option value="${n}" ${n === (cfg.sbMetric === 'qstm' ? cfg.sbLenQ : cfg.sbLen) ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>`}
       <div class="sub">FBだけ揃った状態から、${cfg.sbBy === 'dr' ? `squareの3つのピースが選んだ位置・向きにある${isLearn ? 'ケース' : '問題'}を出します。エッジのEOは、基準の色(DRはD色、FRはF色、BRはB色)がU/D面を向いていれば合っている、とします(FR・BRの位置にあるときはF/B面)。コーナーはD色がU/D面なら合っていて、そうでなければD色がU/D面から外側に見て時計回り・反時計回りどちらの隣にあるかで分けます。${isLearn ? '' : '最短手数は問題文に表示されます。'}` : `選んだsquareを${cfg.sbMetric === 'qstm' ? 'QSTM' : 'STM'}で最短${sbLenOf(cfg)}手で作れる${isLearn ? 'ケース' : '問題'}を出します。`}${isLearn ? '条件に合うケースを一覧にして、最短手順で揃うアニメーションを流します。タップするとそのケースの詳細が見られます。' : "U' U M' M r r' R R' のボタンを順に押して手順を入力し(M' R は r、M R' は r' に自動変換)、squareがSTMかQSTMのどちらかで最短手数で揃えば正解です(揃っても手数が多いと不正解)。"}</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
-        <div class="row" style="gap:6px"><select id="sbmin">${SB_LENS.slice(0, -SB_GAP).map((n) => `<option value="${n}" ${n === sbMin ? 'selected' : ''}>${n}手</option>`).join('')}</select>
-        <span class="sub">〜</span><select id="sbmax">${SB_LENS.slice(SB_GAP).map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
-      <div class="sub">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。手数はSTM(R r U M を1手、180°も1手)で数えます。同じ手数なら両方正解です。</div>` : `
+        <div class="chips" id="sqmetric" style="margin-bottom:6px">${[['stm', 'STM'], ['qstm', 'QSTM']].map(([k, v]) => `<button class="chip ${cfg.sbSqMetric === k ? 'on' : ''}" data-metric="${k}">${v}</button>`).join('')}</div>
+        <div class="row" style="gap:6px"><select id="sbmin">${sqLens.slice(0, -SB_GAP).map((n) => `<option value="${n}" ${n === sbMin ? 'selected' : ''}>${n}手</option>`).join('')}</select>
+        <span class="sub">〜</span><select id="sbmax">${sqLens.slice(SB_GAP).map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
+      <div class="sub">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。${sqQ ? '手数はQSTM(R r U M の90°を1手、180°は2手)で数えます。' : '手数はSTM(R r U M を1手、180°も1手)で数えます。'}同じ手数なら両方正解です。</div>` : `
       <div class="opt"><span class="sub">問題の種類</span>
         <div class="chips" id="kind">${Object.entries(KIND_LABEL).map(([k, v]) => `<button class="chip ${cfg.kind === k ? 'on' : ''}" data-kind="${k}">${v}</button>`).join('')}</div></div>
       <div class="opt"><span class="sub">手順</span>
@@ -219,7 +225,7 @@ function renderHome() {
       <button class="btn" id="pickcases" style="margin:10px 0 0;padding:11px;font-size:15px">ケースを個別に選ぶ<small>選択中 ${nSel} / 42 ケース</small></button>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>`}
     </div>
-    ${isLearn ? `<button class="btn primary" id="go-learn">ケース一覧を見る<small>SB 学習 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenOf(cfg)}手`} ・ ${learnList(cfg).length}ケース</small></button>` : `    <button class="btn primary" id="go-practice">練習スタート<small>${isEo ? `LSE EO ・ ${lseEoLabel(cfg)}` : isSolve ? `SB 手順入力 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenOf(cfg)}手`}` : isSb ? `SB 手数当て ・ ${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
+    ${isLearn ? `<button class="btn primary" id="go-learn">ケース一覧を見る<small>SB 学習 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenOf(cfg)}手`} ・ ${learnList(cfg).length}ケース</small></button>` : `    <button class="btn primary" id="go-practice">練習スタート<small>${isEo ? `LSE EO ・ ${lseEoLabel(cfg)}` : isSolve ? `SB 手順入力 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenOf(cfg)}手`}` : isSb ? `SB 手数当て ・ ${sqQ ? 'QSTM ' : ''}${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
     <div class="row" style="gap:10px">
       <button class="btn blue" id="go-test" style="flex:1">⏱ テスト<small>${cfg.testN}問タイムアタック</small></button>
       <button class="btn" id="go-review" style="flex:1" ${reviewN ? '' : 'disabled'}>🔁 復習<small>間違えた問題 ${reviewN}</small></button>
@@ -314,8 +320,10 @@ function renderHome() {
   }
   if (isSb) {
     // 上限と下限は 3 手以上離す(選択肢の 4 つが範囲に収まるように)。片方を動かしたらもう片方も合わせる
-    app.querySelector('#sbmin').onchange = (e) => { const v = Number(e.target.value); update({ sbMin: v, sbMax: Math.max(v + SB_GAP, sbMax) }); };
-    app.querySelector('#sbmax').onchange = (e) => { const v = Number(e.target.value); update({ sbMax: v, sbMin: Math.min(v - SB_GAP, sbMin) }); };
+    const [kMin, kMax] = sqQ ? ['sbMinQ', 'sbMaxQ'] : ['sbMin', 'sbMax'];
+    app.querySelector('#sbmin').onchange = (e) => { const v = Number(e.target.value); update({ [kMin]: v, [kMax]: Math.max(v + SB_GAP, sbMax) }); };
+    app.querySelector('#sbmax').onchange = (e) => { const v = Number(e.target.value); update({ [kMax]: v, [kMin]: Math.min(v - SB_GAP, sbMin) }); };
+    app.querySelector('#sqmetric').onclick = (e) => { const b = e.target.closest('[data-metric]'); if (b) update({ sbSqMetric: b.dataset.metric }); };
     return;
   }
   app.querySelector('#sets').onclick = (e) => {
@@ -416,7 +424,7 @@ function lseEoOpts(cfg) {
 
 function genOpts(cfg) {
   if (cfg.menu === 'lseEo') return lseEoCond(cfg);
-  if (cfg.menu === 'sb') return { minLen: cfg.sbMin, maxLen: cfg.sbMax };
+  if (cfg.menu === 'sb') return cfg.sbSqMetric === 'qstm' ? { minLen: cfg.sbMinQ, maxLen: cfg.sbMaxQ, metric: 'qstm' } : { minLen: cfg.sbMin, maxLen: cfg.sbMax };
   if (cfg.caseNo != null) return { side: cfg.sbSide, caseNo: cfg.caseNo };
   if (cfg.menu === 'sbSolve') return cfg.sbBy === 'dr' ? pieceCond(cfg) : { len: sbLenOf(cfg), side: cfg.sbSide, metric: cfg.sbMetric };
   return { sets: cfg.sets, only: selectedCases(cfg).map((c) => c.name), stats: cfg.weak ? (S.get().caseStats[drillOf(cfg)] || {}) : null, algOf };
@@ -428,7 +436,7 @@ function startQuiz(mode, override = null) {
   if (mode === 'test' && (cfg.menu === 'sb' || cfg.menu === 'sbSolve' || cfg.menu === 'lseEo')) {
     quiz.problems = Array.from({ length: cfg.testN }, () => generate(quiz.drill, genOpts(cfg)));
     quiz.total = cfg.testN;
-    quiz.cfgKey = cfg.menu === 'lseEo' ? lseEoLabel(cfg) : cfg.menu === 'sb' ? `${cfg.sbMin}-${cfg.sbMax}手` : (cfg.sbBy === 'dr' ? sbPieceKey(cfg) : `${cfg.sbSide} ${cfg.sbMetric === 'qstm' ? 'QSTM' : ''}${sbLenOf(cfg)}手`);
+    quiz.cfgKey = cfg.menu === 'lseEo' ? lseEoLabel(cfg) : cfg.menu === 'sb' ? (cfg.sbSqMetric === 'qstm' ? `QSTM ${cfg.sbMinQ}-${cfg.sbMaxQ}手` : `${cfg.sbMin}-${cfg.sbMax}手`) : (cfg.sbBy === 'dr' ? sbPieceKey(cfg) : `${cfg.sbSide} ${cfg.sbMetric === 'qstm' ? 'QSTM' : ''}${sbLenOf(cfg)}手`);
   } else if (mode === 'test') {
     const pool = selectedCases(cfg);
     const seq = [];
