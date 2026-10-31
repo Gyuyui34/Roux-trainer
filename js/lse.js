@@ -64,7 +64,7 @@ export const MAX_LEN = Math.max(...DIST);
 
 // 最短手順をいくつか(同じ層の 90° が 2 回続いたら 2 とまとめて書く。U U と U' U' は同じ U2 なので 1 つにする)。
 // 並び順(ユーザー指定): M' が多いもの → U' が多いもの。2 は ' の向きに書く(M2'・U2')ので ' 2 回と数える
-const primes = (alg, b) => alg.split(' ').reduce((a, m) => a + (m[0] !== b ? 0 : m.endsWith('2') ? 2 : m.endsWith("'") ? 1 : 0), 0);
+export const primes = (alg, b) => alg.split(' ').reduce((a, m) => a + (m[0] !== b ? 0 : m.endsWith('2') ? 2 : m.endsWith("'") ? 1 : 0), 0);
 export function solutions(s, want = 4) {
   const out = [];
   const walk = (st, path) => {
@@ -77,19 +77,21 @@ export function solutions(s, want = 4) {
     }
   };
   walk(s, []);
-  const join = (moves) => {
-    const r = [];
-    for (const m of moves) {
-      const last = r[r.length - 1];
-      if (last && last[0] === m[0] && !last.endsWith('2')) r[r.length - 1] = `${m[0]}2`;
-      else r.push(m);
-    }
-    return r.join(' ');
-  };
-  return [...new Set(out.map(join))]
-    .sort((a, b) => primes(b, 'M') - primes(a, 'M') || primes(b, 'U') - primes(a, 'U'))
-    .slice(0, want);
+  return sortSols(out, want);
 }
+// 90° の手の列 → 表記(U U → U2)。重複をまとめて M' → U' の多い順に並べる
+export function joinMoves(moves) {
+  const r = [];
+  for (const m of moves) {
+    const last = r[r.length - 1];
+    if (last && last[0] === m[0] && !last.endsWith('2')) r[r.length - 1] = `${m[0]}2`;
+    else r.push(m);
+  }
+  return r.join(' ');
+}
+export const sortSols = (paths, want) => [...new Set(paths.map(joinMoves))]
+  .sort((a, b) => primes(b, 'M') - primes(a, 'M') || primes(b, 'U') - primes(a, 'U'))
+  .slice(0, want);
 
 // ---- 出題
 // opts: { by: 'len', len } 最短手数 / { by: 'pos', counts: [悪いエッジの数], pos: { UF: 'bad'|'good', ... } }

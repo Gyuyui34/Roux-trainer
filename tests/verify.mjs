@@ -224,6 +224,37 @@ for (const side of ['front', 'back']) {
   const p = L.genLseEo({ by: 'pos', counts: [4], pos: { UF: 'bad', DB: 'good' } });
   check(p.badPos.length === 4 && p.badPos.includes('UF') && !p.badPos.includes('DB'), `lseEo pos ${p.badPos}`);
 }
+// EOLR: 表の手数が総当たりと一致・解答例とスクランブルが合う・条件どおりに出る
+{
+  const E = await import('../js/eolr.js');
+  const brute = (cols, depth) => E.solvesEolr(cols, []) || (depth > 0 && E.MOVES.some((m) => brute(C.applyAlg(cols, [m]), depth - 1)));
+  const I = E._internal;
+  let mism = 0;
+  for (let k = 0; k < 3000; k++) {
+    const x = Math.floor(Math.random() * I.N), mi = k % 4;
+    if (I.encS(E.fromColors(C.applyAlg(I.toColors(I.decR(x), 0), [E.MOVES[mi]]))) !== I.stepR(x, mi)) mism++;
+  }
+  check(!mism, `eolr move table ${mism}`);
+  check(E.EOLR_LENS[0] === 2 && E.EOLR_LENS.at(-1) === 13, `eolr lens ${E.EOLR_LENS}`);
+  for (const n of E.EOLR_LENS) {
+    for (let i = 0; i < (n <= 6 ? 5 : 2); i++) {
+      const p = E.genEolr({ by: 'len', len: n });
+      check(p && p.optQ === n, `eolr len ${n}`);
+      check(C.isSolvedAt(p.colors, C.F2B_STICKERS) && (p.colors[4] === 0 || p.colors[31] === 0), 'eolr start');
+      check(C.applyAlg(C.solved(), p.scramble.split(' ')).every((v, j) => v === p.colors[j]), 'eolr scramble');
+      for (const a of p.lseSols) check(E.solvesEolr(p.colors, a.split(' ')) && qtmLen(a.split(' ')) === n, `eolr sol ${a}`);
+      if (n <= 7) check(!brute(p.colors, n - 1), `eolr optimal ${n}`);
+      check(!E.solvesEolr(p.colors, []), 'eolr unsolved');
+    }
+  }
+  // 完成形: UL と UR が入れ替わっていてもよい。U 色が D 面でないとだめ
+  check(E.solvesEolr(C.solved(), ['U', 'M', 'M']) && E.solvesEolr(C.solved(), ["U'", 'M', 'M']) && !E.solvesEolr(C.solved(), ['U', 'M']), 'eolr U M2 / U-prime M2');
+  const p = E.genEolr({ by: 'pos', counts: [0], ul: ['UR'], ur: ['UL'] });
+  check(p && p.badPos.length === 0, 'eolr pos counts');
+  const st = E.fromColors(p.colors);
+  check(st.perm[3] === 2 && st.perm[2] === 3, 'eolr pos ul/ur');
+  check(E.eolrCount({ by: 'pos', counts: [0], ul: ['UR'], ur: ['UL'] }) > 0 && E.eolrCount({ by: 'pos', ul: ['UL'], ur: ['UL'] }) === 0, 'eolr count');
+}
 // SB 手順入力「短い方」: 指定手数が front/back の短い方。短い方の解答例でどちらかが揃う
 for (const metric of ['stm', 'qstm']) {
   for (let i = 0; i < 6; i++) {

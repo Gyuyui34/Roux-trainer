@@ -1,8 +1,9 @@
 // オフライン用キャッシュ。ファイルを更新したら VERSION を上げる
-const VERSION = 'v67';
+const VERSION = 'v68';
 const FILES = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest',
   'js/app.js', 'js/store.js', 'js/fx.js', 'js/drills.js', 'js/cmll.js', 'js/cube.js', 'js/solver.js', 'js/view3d.js', 'js/player.js', 'js/lse.js',
+  'js/eolr.js',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 
