@@ -490,6 +490,8 @@ const sbHighlight = (tracked, pieces = SB_PIECE_STICKERS) => tracked.map((orig) 
 
 // 入力した手順で square k が揃うか
 export function solvesSquare(colors, k, moves) {
+  // k === 'both': front と back のどちらかが揃えばよい
+  if (k === 'both') return Object.keys(SQUARES).some((x) => solvesSquare(colors, x, moves));
   return C.isSolvedAt(C.applyAlg(colors, moves), SQ_STICKERS[k]);
 }
 
@@ -680,7 +682,40 @@ export function sbCaseProblem(side, id) {
 }
 
 // opts.len: 最短手数を指定 / opts.drPos: DR エッジの位置(複数可)を指定。手数は 2 手以上でランダム
+// front と back の短い方を作る問題(opts.side === 'both')。手数は両方の短い方
+function genSbSolveBoth(opts) {
+  const qtm = opts.metric === 'qstm';
+  const ks = Object.keys(SQUARES);
+  for (let attempt = 0; attempt < 40000; attempt++) {
+    const { scramble, tracked } = sbScramble();
+    const want = Math.min(...ks.map((k) => (qtm ? sqQDist(tracked, k) : sqDist(tracked, k))));
+    if (want !== (opts.len || 5)) continue;
+    const r = Object.fromEntries(ks.map((k) => [k, sqSolutions(tracked, k)]));
+    const q = Object.fromEntries(ks.map((k) => [k, sqSolutionsQtm(tracked, k)]));
+    const len = Math.min(...ks.map((k) => r[k].len));
+    const qLen = Math.min(...ks.map((k) => qtmLen(q[k][0])));
+    return {
+      drill: 'sbSolve',
+      colors: colorsOf(tracked),
+      highlight: sbHighlight(tracked),
+      sbSols: Object.fromEntries(ks.map((k) => [k, wideLast(r[k].sols)])),
+      qtmSols: Object.fromEntries(ks.map((k) => [k, wideLast(q[k])])),
+      qOptLen: qLen,
+      square: 'both',
+      optLen: len,
+      inputPad: true,
+      scramble: scramble.join(' '),
+      prompt: `Front / Back の短い方を最短で作る手順を入力(QSTM ${qLen}手 / STM ${len}手)`,
+      caseNo: null,
+      caseKey: qtm ? `both QSTM${qLen}手` : `both ${len}手`,
+      explain: `${ks.map((k) => `${SQUARES[k].name} ${r[k].len}手 (${r[k].sols[0].join(' ')})`).join('、')}`,
+    };
+  }
+  throw new Error('問題を生成できませんでした');
+}
+
 function genSbSolve(opts = {}) {
+  if (opts.side === 'both') return genSbSolveBoth(opts);
   const k = SQUARES[opts.side] ? opts.side : 'front';
   // 学習モードの「このケースを練習」: 決まったケースを出す
   if (opts.caseNo != null) return { ...sbCaseProblem(k, opts.caseNo) };

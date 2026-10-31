@@ -47,6 +47,9 @@ const accColor = (p) => (p >= 90 ? 'var(--ok)' : p >= 70 ? 'var(--accent)' : 'va
 // 復習する間違い(今あるモードのものだけ)
 const liveMistakes = () => S.get().mistakes.filter((m) => DRILLS[baseDrill(m.drill)]);
 
+// SB 学習では「短い方」を front として扱う(設定は残す)
+const learnSideFix = (cfg) => (cfg.sbSide === 'both' ? { ...cfg, sbSide: 'front' } : cfg);
+
 // 練習設定(前回の設定を引き継ぐ)
 function practiceCfg() {
   const cfg = { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, sbMinQ: 2, sbMaxQ: 11, sbSqMetric: 'stm', sbLen: 5, sbLenQ: 8, sbMetric: 'stm', sbSide: 'front', sbBy: 'len', sbDr: [...DR_POSITIONS], sbOri: 'any', sbE2: [...DR_POSITIONS], sbE2Ori: 'any', sbCo: [...CORNER_POSITIONS], sbCoOri: 'any', sbPick: ['dr'], eoBy: 'len', eoLen: 5, eoCounts: [...BAD_COUNTS], eoPos: {}, ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
@@ -66,6 +69,9 @@ function practiceCfg() {
   if (!cfg.eoPos || typeof cfg.eoPos !== 'object') cfg.eoPos = {};
   if (cfg.sbMax - cfg.sbMin < 3) { cfg.sbMin = Math.min(cfg.sbMin, 6); cfg.sbMax = cfg.sbMin + 3; }
   if (!['stm', 'qstm'].includes(cfg.sbSqMetric)) cfg.sbSqMetric = 'stm';
+  // 「短い方」(front/back の両方から最短)は手順入力の最短手数の条件だけ。学習では front として扱う(設定は残す)
+  if (!['front', 'back', 'both'].includes(cfg.sbSide)) cfg.sbSide = 'front';
+  if (cfg.sbSide === 'both' && cfg.menu !== 'sbLearn') cfg.sbBy = 'len';
   if (!(cfg.sbMinQ >= 2 && cfg.sbMaxQ <= 11 && cfg.sbMaxQ - cfg.sbMinQ >= 3)) { cfg.sbMinQ = 2; cfg.sbMaxQ = 11; }
   return cfg;
 }
@@ -163,7 +169,8 @@ function renderHome() {
   const t = S.today();
   const todayN = Object.values(t.practice).reduce((a, x) => a + x.n + x.testN, 0);
   const goal = d.settings.dailyGoal;
-  const cfg = practiceCfg();
+  let cfg = practiceCfg();
+  if (cfg.menu === 'sbLearn') cfg = learnSideFix(cfg);
   const nSel = selectedCases(cfg).length;
   const setsLabel = nSel === CMLL_CASES.length ? '全ケース' : (cfg.excluded || []).some((n) => cfg.sets.includes(n.split(' ')[0])) ? `${nSel}ケース` : cfg.sets.join(' / ');
   const reviewN = liveMistakes().length;
@@ -200,9 +207,9 @@ function renderHome() {
       <div class="opt"><span class="sub">練習メニュー</span>
         <div class="chips" id="menu">${Object.entries(MENU_LABEL).map(([k, v]) => `<button class="chip ${cfg.menu === k ? 'on' : ''}" data-menu="${k}">${v}</button>`).join('')}</div></div>
       ${isEo ? lseEoOpts(cfg) : isSolve ? `<div class="opt"><span class="sub">square</span>
-        <div class="chips" id="sbside">${Object.entries(SQ_LABEL).map(([k, v]) => `<button class="chip ${cfg.sbSide === k ? 'on' : ''}" data-side="${k}">${v}</button>`).join('')}</div></div>
+        <div class="chips" id="sbside">${Object.entries(isLearn ? SQ_LABEL : { ...SQ_LABEL, both: '短い方' }).map(([k, v]) => `<button class="chip ${cfg.sbSide === k ? 'on' : ''}" data-side="${k}">${v}</button>`).join('')}</div></div>
       <div class="opt"><span class="sub">出題条件</span>
-        <div class="chips" id="sbby">${[['len', '最短手数'], ['dr', 'ピースの位置と向き']].map(([k, v]) => `<button class="chip ${cfg.sbBy === k ? 'on' : ''}" data-by="${k}">${v}</button>`).join('')}</div></div>
+        <div class="chips" id="sbby">${[['len', '最短手数'], ...(cfg.sbSide === 'both' ? [] : [['dr', 'ピースの位置と向き']])].map(([k, v]) => `<button class="chip ${cfg.sbBy === k ? 'on' : ''}" data-by="${k}">${v}</button>`).join('')}</div></div>
       ${cfg.sbBy === 'dr' ? pieceOpts(cfg) : `<div class="opt"><span class="sub">最短手数</span>
         <div class="row" style="gap:6px"><div class="chips" id="sbmetric">${[['stm', 'STM'], ['qstm', 'QSTM']].map(([k, v]) => `<button class="chip ${cfg.sbMetric === k ? 'on' : ''}" data-metric="${k}">${v}</button>`).join('')}</div>
         <select id="sblen">${(cfg.sbMetric === 'qstm' ? SB_LENS_Q : SB_LENS).map((n) => `<option value="${n}" ${n === (cfg.sbMetric === 'qstm' ? cfg.sbLenQ : cfg.sbLen) ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>`}
@@ -225,7 +232,7 @@ function renderHome() {
       <button class="btn" id="pickcases" style="margin:10px 0 0;padding:11px;font-size:15px">ケースを個別に選ぶ<small>選択中 ${nSel} / 42 ケース</small></button>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>`}
     </div>
-    ${isLearn ? `<button class="btn primary" id="go-learn">ケース一覧を見る<small>SB 学習 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenOf(cfg)}手`} ・ ${learnList(cfg).length}ケース</small></button>` : `    <button class="btn primary" id="go-practice">練習スタート<small>${isEo ? `LSE EO ・ ${lseEoLabel(cfg)}` : isSolve ? `SB 手順入力 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenOf(cfg)}手`}` : isSb ? `SB 手数当て ・ ${sqQ ? 'QSTM ' : ''}${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
+    ${isLearn ? `<button class="btn primary" id="go-learn">ケース一覧を見る<small>SB 学習 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenOf(cfg)}手`} ・ ${learnList(cfg).length}ケース</small></button>` : `    <button class="btn primary" id="go-practice">練習スタート<small>${isEo ? `LSE EO ・ ${lseEoLabel(cfg)}` : isSolve ? `SB 手順入力 ・ ${cfg.sbSide === 'both' ? 'Front/Backの短い方' : SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenOf(cfg)}手`}` : isSb ? `SB 手数当て ・ ${sqQ ? 'QSTM ' : ''}${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
     <div class="row" style="gap:10px">
       <button class="btn blue" id="go-test" style="flex:1">⏱ テスト<small>${cfg.testN}問タイムアタック</small></button>
       <button class="btn" id="go-review" style="flex:1" ${reviewN ? '' : 'disabled'}>🔁 復習<small>間違えた問題 ${reviewN}</small></button>
@@ -237,7 +244,7 @@ function renderHome() {
   const update = (patch) => { S.setLastPractice({ ...practiceCfg(), ...patch }); renderHome(); };
   app.querySelector('#menu').onclick = (e) => { const b = e.target.closest('[data-menu]'); if (b) update({ menu: b.dataset.menu }); };
   if (isLearn) {
-    app.querySelector('#go-learn').onclick = () => openLearn(practiceCfg());
+    app.querySelector('#go-learn').onclick = () => openLearn(learnSideFix(practiceCfg()));
   } else {
     app.querySelector('#go-practice').onclick = () => startQuiz('practice');
     app.querySelector('#go-test').onclick = () => startQuiz('test');

@@ -224,6 +224,17 @@ for (const side of ['front', 'back']) {
   const p = L.genLseEo({ by: 'pos', counts: [4], pos: { UF: 'bad', DB: 'good' } });
   check(p.badPos.length === 4 && p.badPos.includes('UF') && !p.badPos.includes('DB'), `lseEo pos ${p.badPos}`);
 }
+// SB 手順入力「短い方」: 指定手数が front/back の短い方。短い方の解答例でどちらかが揃う
+for (const metric of ['stm', 'qstm']) {
+  for (let i = 0; i < 6; i++) {
+    const n = 4 + i;
+    const p = generate('sbSolve', { side: 'both', len: n, metric });
+    check((metric === 'qstm' ? p.qOptLen : p.optLen) === n, `sbSolve both ${metric} ${n}`);
+    const bestQ = Object.values(p.qtmSols).map((l) => l[0]).sort((a, b) => qtmLen(a.split(' ')) - qtmLen(b.split(' ')))[0];
+    check(solvesSquare(p.colors, 'both', bestQ.split(' ')) && qtmLen(bestQ.split(' ')) === p.qOptLen, 'sbSolve both sol');
+    check(!solvesSquare(p.colors, 'both', []), 'sbSolve both unsolved');
+  }
+}
 console.log('cmllEo bad-edge counts', JSON.stringify(dist));
 console.log(fail ? `${fail} failures` : 'all passed');
 process.exit(fail ? 1 : 0);
