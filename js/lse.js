@@ -109,14 +109,6 @@ export function eoCount(o) {
   return n;
 }
 
-// 色を付けるのは M 列のセンター(U/D/F/B)と LSE エッジ(側面の色も)
-function highlightOf(cols) {
-  const h = Array(54).fill('0');
-  for (const k of CENTER_STK) h[k] = '1';
-  for (let i = 0; i < 6; i++) for (const k of [UD_STK[i], SIDE_STK[i]]) h[k] = '1';
-  return h.join('');
-}
-
 // CMLL まで終わった状態から U と M をランダムに回し、U センターを U/D 面に戻して条件に合うものを探す
 export function genLseEo(opts = {}) {
   const o = opts.by ? opts : { by: 'len', len: 4 };
@@ -137,7 +129,7 @@ export function genLseEo(opts = {}) {
     inputPad: true,
     padMoves: ["U'", 'U', "M'", 'M'],
     colors: cols,
-    highlight: highlightOf(cols),
+    highlight: null, // 全部のピースに色を付ける
     optQ: d,
     lseSols: solutions(s, 4),
     scramble: scramble.join(' '),

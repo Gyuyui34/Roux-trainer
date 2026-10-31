@@ -411,7 +411,7 @@ function lseEoOpts(cfg) {
     <div class="opt"><span class="sub">位置ごとの向き(タップで 問わない → 悪い → 合う)</span>
       <div class="chips" id="eopos">${EDGE_POS.map((p) => `<button class="chip eop ${cfg.eoPos[p] || ''}" data-pos="${p}">${p}${cfg.eoPos[p] ? ` ${posLabel[cfg.eoPos[p]]}` : ''}</button>`).join('')}<button class="chip" id="eoposreset">すべて問わない</button></div></div>`}
     <div class="sub" style="${n ? '' : 'color:var(--ng)'}">${n ? `条件に合うEOの形: ${n}通り(センターの位置も含む)` : 'この条件に合う形はありません。条件をゆるめてください'}</div>
-    <div class="sub">CMLLまで終わった状態(U面センターはU面かD面)から、LSEのEOを揃える手順を U' U M' M のボタンで入力します。QSTM(90°を1手、180°は2手)で最短なら正解です。U/D/F/B面のセンターとLSEのエッジに色を付けます。手順の最後には、U/D面のセンターがU/D面に来るようにM列も合わせます(その手も手数に入ります)。向きは、U/D色がU/D面を向いていれば合っている、とします(センターがM/M'ずれのときは、M列のエッジはF/B面向きで合っている)。${cfg.eoBy === 'pos' ? '最短手数は問題文に表示されます。' : ''}</div>`;
+    <div class="sub">CMLLまで終わった状態(U面センターはU面かD面)から、LSEのEOを揃える手順を U' U M' M のボタンで入力します。QSTM(90°を1手、180°は2手)で最短なら正解です。すべてのピースに色を付けます。手順の最後には、U/D面のセンターがU/D面に来るようにM列も合わせます(その手も手数に入ります)。向きは、U/D色がU/D面を向いていれば合っている、とします(センターがM/M'ずれのときは、M列のエッジはF/B面向きで合っている)。${cfg.eoBy === 'pos' ? '最短手数は問題文に表示されます。' : ''}</div>`;
 }
 
 function genOpts(cfg) {
@@ -795,7 +795,7 @@ function seqSummary(p) {
 // 入力中の手順をキューブにそのまま反映する。before の盤面から手 m を短く回して今の盤面にする
 function seqCube(before, m) {
   const p = quiz.current, view = quiz.view;
-  const now = (seq) => [applyAlg(p.colors, seq), applyAlg(p.highlight.split(''), seq).join('')];
+  const now = (seq) => [applyAlg(p.colors, seq), p.highlight ? applyAlg(p.highlight.split(''), seq).join('') : null];
   const [cs, hs] = now(quiz.seq);
   view.cancelMove();
   if (!m) { view.setColors(cs, hs); return; }
