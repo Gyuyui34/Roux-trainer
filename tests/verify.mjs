@@ -235,6 +235,17 @@ for (const metric of ['stm', 'qstm']) {
     check(!solvesSquare(p.colors, 'both', []), 'sbSolve both unsolved');
   }
 }
+// 範囲指定: front と back の両方の最短手数が 最短〜最長 に入る
+for (const [metric, lo, hi] of [['stm', 3, 5], ['qstm', 6, 9], ['stm', 2, 2], ['qstm', 11, 11]]) {
+  for (let i = 0; i < 4; i++) {
+    const p = generate('sbSolve', { side: 'both', len: lo, lenMax: hi, metric });
+    const lens = Object.keys(SQUARES).map((k) => (metric === 'qstm' ? qtmLen(p.qtmSols[k][0].split(' ')) : p.sbSols[k][0].split(' ').length));
+    check(lens.every((n) => n >= lo && n <= hi), `sbSolve both range ${metric} ${lo}-${hi}: ${lens}`);
+  }
+  const q = generate('sbSolve', { side: 'front', len: lo, lenMax: hi, metric });
+  const n = metric === 'qstm' ? q.qOptLen : q.optLen;
+  check(n >= lo && n <= hi, `sbSolve front range ${metric} ${lo}-${hi}: ${n}`);
+}
 console.log('cmllEo bad-edge counts', JSON.stringify(dist));
 console.log(fail ? `${fail} failures` : 'all passed');
 process.exit(fail ? 1 : 0);

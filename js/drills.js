@@ -632,7 +632,8 @@ export function sbCatalog(opts = {}) {
     if (stm[e] === 255 || stm[e] < 2) continue;
     const info = { dr: pieceInfo(EDGE_STK[Math.floor(e / 576)]), co: pieceInfo(CORNER_STK[Math.floor(e / 24) % 24]), e2: pieceInfo(EDGE_STK[e % 24]) };
     if (opts.len) {
-      if ((opts.metric === 'qstm' ? q[e] : stm[e]) !== opts.len) continue;
+      const v = opts.metric === 'qstm' ? q[e] : stm[e];
+      if (v < opts.len || v > (opts.lenMax ?? opts.len)) continue;
     } else if (!matchPieces(info, opts)) continue;
     list.push({ id: e, side: k, stm: stm[e], qstm: q[e], ...info });
   }
@@ -682,14 +683,67 @@ export function sbCaseProblem(side, id) {
 }
 
 // opts.len: 最短手数を指定 / opts.drPos: DR エッジの位置(複数可)を指定。手数は 2 手以上でランダム
-// front と back の短い方を作る問題(opts.side === 'both')。手数は両方の短い方
+// SB の 5 ピース(DR FR BR DRF DRB)の置き方で、実際に作れるものを全部調べる(幅優先探索。初回だけ)
+let sbReachable = null;
+function sbReach() {
+  if (sbReachable) return sbReachable;
+  const sb = getSb();
+  const N = 24 ** 5;
+  const seen = new Uint8Array(N);
+  const start = sb.goal.reduce((a, v) => a * 24 + v, 0);
+  seen[start] = 1;
+  let frontier = [start];
+  const cls = sb.isCorner.map((c) => (c ? 1 : 0));
+  while (frontier.length) {
+    const next = [];
+    for (const x of frontier) {
+      const l = [Math.floor(x / 331776), Math.floor(x / 13824) % 24, Math.floor(x / 576) % 24, Math.floor(x / 24) % 24, x % 24];
+      for (let mi = 0; mi < sb.moves.length; mi++) {
+        const t = sb.trans[mi];
+        let y = 0;
+        for (let k = 0; k < 5; k++) y = y * 24 + t[cls[k]][l[k]];
+        if (!seen[y]) { seen[y] = 1; next.push(y); }
+      }
+    }
+    frontier = next;
+  }
+  sbReachable = seen;
+  return seen;
+}
+// front と back の両方の最短手数が lo〜hi(両端を含む)に入る置き方の一覧
+const bothCache = new Map();
+function bothCandidates(metric, lo, hi) {
+  const key = `${metric}:${lo}:${hi}`;
+  if (bothCache.has(key)) return bothCache.get(key);
+  const seen = sbReach();
+  const f = (metric === 'qstm' ? getQtm('front') : getSq('front')).tables[0].dist;
+  const b = (metric === 'qstm' ? getQtm('back') : getSq('back')).tables[0].dist;
+  const out = [];
+  for (let x = 0; x < seen.length; x++) {
+    if (!seen[x]) continue;
+    // 並び: DR FR BR DRF DRB。front は [DR DRF FR]、back は [DR DRB BR]
+    const dr = Math.floor(x / 331776), fr = Math.floor(x / 13824) % 24, br = Math.floor(x / 576) % 24, drf = Math.floor(x / 24) % 24, drb = x % 24;
+    const df = f[dr * 576 + drf * 24 + fr], db = b[dr * 576 + drb * 24 + br];
+    if (df >= lo && df <= hi && db >= lo && db <= hi) out.push(x);
+  }
+  bothCache.set(key, out);
+  return out;
+}
+
+// front と back の短い方を作る問題(opts.side === 'both')。front と back の両方の最短手数が指定範囲に入る局面を出す
 function genSbSolveBoth(opts) {
   const qtm = opts.metric === 'qstm';
   const ks = Object.keys(SQUARES);
-  for (let attempt = 0; attempt < 40000; attempt++) {
-    const { scramble, tracked } = sbScramble();
-    const want = Math.min(...ks.map((k) => (qtm ? sqQDist(tracked, k) : sqDist(tracked, k))));
-    if (want !== (opts.len || 5)) continue;
+  const lo = opts.len || 5, hi = opts.lenMax ?? lo;
+  const list = bothCandidates(qtm ? 'qstm' : 'stm', lo, hi);
+  if (!list.length) throw new Error('この手数の範囲に合う問題がありません');
+  const x = list[Math.floor(Math.random() * list.length)];
+  const locs = [Math.floor(x / 331776), Math.floor(x / 13824) % 24, Math.floor(x / 576) % 24, Math.floor(x / 24) % 24, x % 24];
+  const inv = C.invertAlg(getSb().solveLocs(locs)[0]);
+  const fix = ['', 'M', 'M2', "M'"].find((m) => colorsOf(trackedApply(trackedSolved(), [...parse(m), ...inv]))[4] === 0);
+  const scramble = [...parse(fix), ...inv];
+  const tracked = trackedApply(trackedSolved(), scramble);
+  {
     const r = Object.fromEntries(ks.map((k) => [k, sqSolutions(tracked, k)]));
     const q = Object.fromEntries(ks.map((k) => [k, sqSolutionsQtm(tracked, k)]));
     const len = Math.min(...ks.map((k) => r[k].len));
@@ -711,7 +765,6 @@ function genSbSolveBoth(opts) {
       explain: `${ks.map((k) => `${SQUARES[k].name} ${r[k].len}手 (${r[k].sols[0].join(' ')})`).join('、')}`,
     };
   }
-  throw new Error('問題を生成できませんでした');
 }
 
 function genSbSolve(opts = {}) {
@@ -731,7 +784,8 @@ function genSbSolve(opts = {}) {
     // 手数の指定は STM か QSTM(opts.metric)で数える
     const qtm = opts.metric === 'qstm';
     const want = qtm ? getQtm(k).h(getQtm(k).locsFromState(tracked)) : len;
-    if (byDr ? !oriOk || len < 2 : want !== (opts.len || 5)) continue;
+    const lo = opts.len || 5, hi = opts.lenMax ?? lo;
+    if (byDr ? !oriOk || len < 2 : want < lo || want > hi) continue;
     const r = sqSolutions(tracked, k);
     const qSols = sqSolutionsQtm(tracked, k);
     const qLen = qtmLen(qSols[0]);
