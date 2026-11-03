@@ -24,8 +24,8 @@ export function eoState(cols) {
 // 向きが悪い位置。センターが M/M' ずれのときは、M 列のエッジは U/D 色が F/B 面を向いていれば合っている
 export const badOf = (s) => s.ori.map((o, i) => (s.c % 2 && M_SLICE.includes(i) ? 1 - o : o));
 export const eoDone = (s) => badOf(s).every((b) => !b);
-// 練習の完成形: EO が揃い、U/D のセンターが U/D 面にある(手順の最後に M 列も合わせる)
-export const eoFinished = (s) => s.c % 2 === 0 && eoDone(s);
+// 練習の完成形: EO が揃っていれば完成。U センターが F/B 面にあるときは M 列のエッジを F/B 向きで判定する(ユーザー指定 2026-11-03)
+export const eoFinished = (s) => eoDone(s);
 
 // 手の作用(ステッカーの置換から作る)
 const TABLE = MOVES.map((m) => {
