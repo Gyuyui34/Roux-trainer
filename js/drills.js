@@ -819,6 +819,7 @@ export const ENABLED_DRILLS = ['cmll'];
 
 import { genLseEo } from './lse.js';
 import { genEolr } from './eolr.js';
+import { genEolrb } from './eolrb.js';
 
 export const DRILLS = {
   fb: { name: 'FB', full: 'ファーストブロック', gen: (o) => genBlock('fb', o), view: [-28, 38], ranges: [[1, 5], [6, 6], [7, 7], [8, 20]] },
@@ -831,6 +832,7 @@ export const DRILLS = {
   sbSq: { name: 'SB square', full: 'SBのsquare', gen: genSbSquare, view: [-28, -35], noSlot: true },
   lseEo: { name: 'LSE EO', full: 'LSEのEOを手順で', gen: genLseEo, view: [-35, -30], noSlot: true },
   eolr: { name: 'EOLR', full: 'EOLRを手順で', gen: genEolr, view: [-35, -30], noSlot: true },
+  eolrb: { name: 'EOLRb', full: 'EOLRbを手順で', gen: genEolrb, view: [-35, -30], noSlot: true },
   eo: { name: 'EO', full: 'LSE EO', gen: genEo, view: [-40, -20], ranges: [[1, 4], [5, 6], [7, 20]] },
 };
 

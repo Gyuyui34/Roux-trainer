@@ -214,4 +214,4 @@ export const solvesEolr = (colors, moves) => isEolr(fromColors(C.applyAlg(colors
 export const EOLR_LENS = [...new Set(candidates({ by: 'pos' }).map((x) => DIST[x]))].sort((a, b) => a - b);
 
 // テスト用
-export const _internal = { fromColors, toColors, encS, decR, stepR, DIST, FULL, N };
+export const _internal = { fromColors, toColors, encS, decR, stepR, DIST, FULL, N, A_T, scrambleOf, CORNER_STK };

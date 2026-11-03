@@ -255,6 +255,26 @@ for (const side of ['front', 'back']) {
   check(st.perm[3] === 2 && st.perm[2] === 3, 'eolr pos ul/ur');
   check(E.eolrCount({ by: 'pos', counts: [0], ul: ['UR'], ur: ['UL'] }) > 0 && E.eolrCount({ by: 'pos', ul: ['UL'], ur: ['UL'] }) === 0, 'eolr count');
 }
+// EOLRb: 完成形・最短・スクランブル・条件
+{
+  const B = await import('../js/eolrb.js');
+  const ex = (a) => a.split(' ').flatMap((m) => (m.endsWith('2') ? [m[0], m[0]] : [m]));
+  check(B.solvesEolrb(C.solved(), ['U']) && B.solvesEolrb(C.solved(), ["U'"]) && !B.solvesEolrb(C.solved(), []) && !B.solvesEolrb(C.solved(), ['U', 'U']), 'eolrb goal U');
+  check(B.solvesEolrb(C.solved(), ['M', 'U']), 'eolrb goal center F/B');
+  const brute = (cols, depth) => B.solvesEolrb(cols, []) || (depth > 0 && B.MOVES.some((m) => brute(C.applyAlg(cols, [m]), depth - 1)));
+  for (const n of B.eolrbLens()) {
+    for (let i = 0; i < (n <= 6 ? 4 : 1); i++) {
+      const p = B.genEolrb({ by: 'len', len: n });
+      check(p && p.optQ === n, `eolrb len ${n}`);
+      check(C.isSolvedAt(p.colors, C.F2B_STICKERS) && (p.colors[4] === 0 || p.colors[31] === 0), 'eolrb start');
+      check(C.applyAlg(C.solved(), p.scramble.split(' ')).every((v, j) => v === p.colors[j]), 'eolrb scramble');
+      for (const a of p.lseSols) check(B.solvesEolrb(p.colors, ex(a)) && qtmLen(a.split(' ')) === n, `eolrb sol ${a}`);
+      if (n <= 7) check(!brute(p.colors, n - 1), `eolrb optimal ${n}`);
+    }
+  }
+  const p = B.genEolrb({ by: 'pos', counts: [2], ul: ['DF'], ur: null });
+  check(p && p.badPos.length === 2, 'eolrb pos');
+}
 // SB 手順入力「短い方」: 指定手数が front/back の短い方。短い方の解答例でどちらかが揃う
 for (const metric of ['stm', 'qstm']) {
   for (let i = 0; i < 6; i++) {

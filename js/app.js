@@ -7,6 +7,7 @@ import { applyAlg, solved } from './cube.js';
 import { Player, u2p, invMove } from './player.js';
 import { EDGE_POS, BAD_COUNTS, START_LENS, eoCount, solvesEo } from './lse.js';
 import { LR_BAD_COUNTS, EOLR_LENS, eolrCount, solvesEolr } from './eolr.js';
+import { eolrbLens, eolrbCount, solvesEolrb } from './eolrb.js';
 
 const app = document.getElementById('app');
 const modalRoot = document.getElementById('modal-root');
@@ -22,6 +23,7 @@ const drillOf = (cfg) => {
   if (cfg.menu === 'sb') return 'sbSq';
   if (cfg.menu === 'lseEo') return 'lseEo';
   if (cfg.menu === 'eolr') return 'eolr';
+  if (cfg.menu === 'eolrb') return 'eolrb';
   if (cfg.menu === 'sbSolve' || cfg.menu === 'sbLearn') return 'sbSolve';
   const base = cfg.kind === 'eo' ? (cfg.auf === 'random' ? 'cmllEoAuf' : 'cmllEo') : (cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
   return S.get().settings.algSlot === 'oh' ? `${base}Oh` : base;
@@ -32,7 +34,7 @@ const cfgLabel = (key) => (key === 'all' ? '全ケース' : key.startsWith('case
 const baseDrill = (k) => k.replace(/Oh$/, '');
 // 今はないモード(記録だけ残っているもの)は名前をそのまま出す
 const drillName = (k) => (!DRILLS[baseDrill(k)] ? k : DRILLS[baseDrill(k)].noSlot ? DRILLS[k].name : `${DRILLS[baseDrill(k)].name}・${k.endsWith('Oh') ? '片手' : '両手'}`);
-const MENU_LABEL = { cmll: 'CMLL', sb: 'SB 手数当て', sbSolve: 'SB 手順入力', sbLearn: 'SB 学習', lseEo: 'LSE EO', eolr: 'EOLR' };
+const MENU_LABEL = { cmll: 'CMLL', sb: 'SB 手数当て', sbSolve: 'SB 手順入力', sbLearn: 'SB 学習', lseEo: 'LSE EO', eolr: 'EOLR', eolrb: 'EOLRb' };
 const SQ_LABEL = { front: 'Front square', back: 'Back square' };
 // 並び: U' | U | r / r' | R / R' (U' と U は縦 2 段分)
 const PAD_MOVES = ["U'", 'U', "M'", 'r', 'R', 'M', "r'", "R'"];
@@ -54,7 +56,7 @@ const learnSideFix = (cfg) => (cfg.sbSide === 'both' ? { ...cfg, sbSide: 'front'
 
 // 練習設定(前回の設定を引き継ぐ)
 function practiceCfg() {
-  const cfg = { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, sbMinQ: 2, sbMaxQ: 11, sbSqMetric: 'stm', sbLen: 5, sbLenQ: 8, sbLenMax: 5, sbLenQMax: 8, sbMetric: 'stm', sbSide: 'front', sbBy: 'len', sbDr: [...DR_POSITIONS], sbOri: 'any', sbE2: [...DR_POSITIONS], sbE2Ori: 'any', sbCo: [...CORNER_POSITIONS], sbCoOri: 'any', sbPick: ['dr'], eoBy: 'len', eoLen: 5, eoCounts: [...BAD_COUNTS], eoPos: {}, lrBy: 'len', lrLen: 7, lrCounts: [...LR_BAD_COUNTS], lrPos: {}, lrUL: [...EDGE_POS], lrUR: [...EDGE_POS], ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
+  const cfg = { auf: 'none', kind: 'alg', menu: 'cmll', sbMin: 2, sbMax: 9, sbMinQ: 2, sbMaxQ: 11, sbSqMetric: 'stm', sbLen: 5, sbLenQ: 8, sbLenMax: 5, sbLenQMax: 8, sbMetric: 'stm', sbSide: 'front', sbBy: 'len', sbDr: [...DR_POSITIONS], sbOri: 'any', sbE2: [...DR_POSITIONS], sbE2Ori: 'any', sbCo: [...CORNER_POSITIONS], sbCoOri: 'any', sbPick: ['dr'], eoBy: 'len', eoLen: 5, eoCounts: [...BAD_COUNTS], eoPos: {}, lrBy: 'len', lrLen: 7, lrCounts: [...LR_BAD_COUNTS], lrPos: {}, lrUL: [...EDGE_POS], lrUR: [...EDGE_POS], lrbBy: 'len', lrbLen: 8, lrbCounts: [...LR_BAD_COUNTS], lrbPos: {}, lrbUL: [...EDGE_POS], lrbUR: [...EDGE_POS], ...(S.get().lastPractice || { drill: 'cmll', sets: [...CMLL_SETS], weak: true, testN: 10 }) };
   // 以前の設定で上限と下限が近すぎる場合は広げる
   if (!['any', 'good', 'bad'].includes(cfg.sbOri)) cfg.sbOri = 'any';
   if (!['any', 'good', 'bad'].includes(cfg.sbE2Ori)) cfg.sbE2Ori = 'any';
@@ -76,7 +78,12 @@ function practiceCfg() {
   if (!EOLR_LENS.includes(cfg.lrLen)) cfg.lrLen = 7;
   if (!Array.isArray(cfg.lrCounts) || !cfg.lrCounts.length) cfg.lrCounts = [...LR_BAD_COUNTS];
   if (!cfg.lrPos || typeof cfg.lrPos !== 'object') cfg.lrPos = {};
-  for (const k of ['lrUL', 'lrUR']) if (!Array.isArray(cfg[k]) || !cfg[k].length) cfg[k] = [...EDGE_POS];
+  for (const k of ['lrUL', 'lrUR', 'lrbUL', 'lrbUR']) if (!Array.isArray(cfg[k]) || !cfg[k].length) cfg[k] = [...EDGE_POS];
+  if (!['len', 'pos'].includes(cfg.lrbBy)) cfg.lrbBy = 'len';
+  if (!Array.isArray(cfg.lrbCounts) || !cfg.lrbCounts.length) cfg.lrbCounts = [...LR_BAD_COUNTS];
+  if (!cfg.lrbPos || typeof cfg.lrbPos !== 'object') cfg.lrbPos = {};
+  // EOLRb の表は大きいので、EOLRb を選んだときだけ作る
+  if (cfg.menu === 'eolrb' && !eolrbLens().includes(cfg.lrbLen)) cfg.lrbLen = 8;
   if (cfg.sbMax - cfg.sbMin < 3) { cfg.sbMin = Math.min(cfg.sbMin, 6); cfg.sbMax = cfg.sbMin + 3; }
   if (!['stm', 'qstm'].includes(cfg.sbSqMetric)) cfg.sbSqMetric = 'stm';
   // 「短い方」(front/back の両方から最短)は手順入力の最短手数の条件だけ。学習では front として扱う(設定は残す)
@@ -187,7 +194,7 @@ function renderHome() {
   const isSb = cfg.menu === 'sb';
   const isLearn = cfg.menu === 'sbLearn';
   const isSolve = cfg.menu === 'sbSolve' || isLearn;
-  const isEo = cfg.menu === 'lseEo' || cfg.menu === 'eolr';
+  const isEo = !!EO_KIT[cfg.menu];
   const kit = EO_KIT[cfg.menu];
   // SB 手数当ての範囲は STM と QSTM で別々に覚える
   const sqQ = cfg.sbSqMetric === 'qstm';
@@ -294,7 +301,7 @@ function renderHome() {
     const resetEl = app.querySelector('#eoposreset');
     if (resetEl) resetEl.onclick = () => update({ [kit.pos]: {} });
     // EOLR: UL・UR エッジの今の位置(複数選択、問わない = 全部)
-    for (const [id, key] of [['#lrul', 'lrUL'], ['#lrur', 'lrUR']]) {
+    for (const [id, key] of [['#lrul', kit.ul], ['#lrur', kit.ur]]) {
       const el = app.querySelector(id);
       if (el) el.onclick = (e) => {
         const b = e.target.closest('[data-pos]');
@@ -436,15 +443,16 @@ const algOf = (c) => algFor(c, S.get().settings.algSlot);
 
 // LSE EO と EOLR の出題条件: 最短手数(QSTM) か、向きが悪いエッジの数と位置(EOLR は UL・UR エッジの位置も)
 const EO_KIT = {
-  lseEo: { name: 'LSE EO', by: 'eoBy', len: 'eoLen', counts: 'eoCounts', pos: 'eoPos', COUNTS: BAD_COUNTS, LENS: START_LENS, count: eoCount },
-  eolr: { name: 'EOLR', by: 'lrBy', len: 'lrLen', counts: 'lrCounts', pos: 'lrPos', COUNTS: LR_BAD_COUNTS, LENS: EOLR_LENS, count: eolrCount },
+  lseEo: { name: 'LSE EO', by: 'eoBy', len: 'eoLen', counts: 'eoCounts', pos: 'eoPos', COUNTS: BAD_COUNTS, LENS: () => START_LENS, count: eoCount },
+  eolr: { name: 'EOLR', by: 'lrBy', len: 'lrLen', counts: 'lrCounts', pos: 'lrPos', ul: 'lrUL', ur: 'lrUR', COUNTS: LR_BAD_COUNTS, LENS: () => EOLR_LENS, count: eolrCount },
+  eolrb: { name: 'EOLRb', by: 'lrbBy', len: 'lrbLen', counts: 'lrbCounts', pos: 'lrbPos', ul: 'lrbUL', ur: 'lrbUR', COUNTS: LR_BAD_COUNTS, LENS: eolrbLens, count: eolrbCount },
 };
 const allOrNull = (list) => (list.length === EDGE_POS.length ? null : list);
 function lseEoCond(cfg) {
   const k = EO_KIT[cfg.menu];
   if (cfg[k.by] === 'len') return { by: 'len', len: cfg[k.len] };
   const c = { by: 'pos', counts: cfg[k.counts].length === k.COUNTS.length ? null : cfg[k.counts], pos: cfg[k.pos] };
-  if (cfg.menu === 'eolr') { c.ul = allOrNull(cfg.lrUL); c.ur = allOrNull(cfg.lrUR); }
+  if (k.ul) { c.ul = allOrNull(cfg[k.ul]); c.ur = allOrNull(cfg[k.ur]); }
   return c;
 }
 function lseEoLabel(cfg) {
@@ -456,7 +464,7 @@ function lseEoLabel(cfg) {
   return parts.length ? parts.join(' ・ ') : '条件なし';
 }
 function lseEoOpts(cfg) {
-  const k = EO_KIT[cfg.menu], lr = cfg.menu === 'eolr';
+  const k = EO_KIT[cfg.menu], lr = !!k.ul, lrb = cfg.menu === 'eolrb';
   const n = k.count(lseEoCond(cfg));
   const counts = cfg[k.counts], pos = cfg[k.pos];
   const all = counts.length === k.COUNTS.length;
@@ -469,16 +477,16 @@ function lseEoOpts(cfg) {
   return `<div class="opt"><span class="sub">出題条件</span>
       <div class="chips" id="eoby">${[['len', '最短手数'], ['pos', lr ? 'EOとUL/URの位置' : 'EOの数と位置']].map(([v, l]) => `<button class="chip ${cfg[k.by] === v ? 'on' : ''}" data-by="${v}">${l}</button>`).join('')}</div></div>
     ${cfg[k.by] === 'len' ? `<div class="opt"><span class="sub">最短手数(QSTM)</span>
-      <select id="eolen">${k.LENS.map((x) => `<option value="${x}" ${x === cfg[k.len] ? 'selected' : ''}>${x}手</option>`).join('')}</select></div>`
+      <select id="eolen">${k.LENS().map((x) => `<option value="${x}" ${x === cfg[k.len] ? 'selected' : ''}>${x}手</option>`).join('')}</select></div>`
     : `<div class="opt"><span class="sub">向きが悪いエッジの数(複数可)</span>
       <div class="chips" id="eocnt"><button class="chip ${all ? 'on' : ''}" data-v="*">問わない</button>${k.COUNTS.map((x) => `<button class="chip ${!all && counts.includes(x) ? 'on' : ''}" data-v="${x}">${x}個</button>`).join('')}</div></div>
     <div class="opt"><span class="sub">位置ごとの向き(タップで 問わない → 悪い → 合う)</span>
       <div class="chips" id="eopos">${EDGE_POS.map((p) => `<button class="chip eop ${pos[p] || ''}" data-pos="${p}">${p}${pos[p] ? ` ${posLabel[pos[p]]}` : ''}</button>`).join('')}<button class="chip" id="eoposreset">すべて問わない</button></div></div>
-    ${lr ? lrChips('lrul', 'lrUL', 'UL') + lrChips('lrur', 'lrUR', 'UR') : ''}`}
-    <div class="sub" style="${n ? '' : 'color:var(--ng)'}">${n ? `条件に合う形: ${n}通り(${lr ? 'エッジの位置と向き、' : ''}センターの位置も含む)` : 'この条件に合う形はありません。条件をゆるめてください'}</div>
-    <div class="sub">${lr
+    ${lr ? lrChips('lrul', k.ul, 'UL') + lrChips('lrur', k.ur, 'UR') : ''}`}
+    <div class="sub" style="${n ? '' : 'color:var(--ng)'}">${n ? `条件に合う形: ${n}通り(${lr ? 'エッジの位置と向き、' : ''}センター${lrb ? '・コーナー' : ''}の位置も含む)` : 'この条件に合う形はありません。条件をゆるめてください'}</div>
+    <div class="sub">${lrb ? "CMLLまで終わった状態(U面センターはU面かD面)から、EOを揃えて、ULとURのエッジをUF・UBに入れ(どちらにどちらが入ってもよい)、U面のコーナーと合わせて1×1×3のブロックをU面に2つ作る手順を U' U M' M のボタンで入力します。" : lr
     ? "CMLLまで終わった状態(U面センターはU面かD面)から、EOを揃えて、ULとURのエッジをU色がD面を向くようにDF・DBに入れる手順(どちらにどちらが入ってもよい)を U' U M' M のボタンで入力します。"
-    : "CMLLまで終わった状態(U面センターはU面かD面)から、LSEのEOを揃える手順を U' U M' M のボタンで入力します。"}QSTM(90°を1手、180°は2手)で最短なら正解です。すべてのピースに色を付けます。${lr ? 'U面センターがF/B面のままでも完成にできます。U面センターがU/D面のときは、6本ともU/D色がU/D面を向いていれば揃っています。U面センターがF/B面のときは、DF・DBのUL・URエッジはU色がD面、残り4本はU/D色がU/D面以外を向いていれば揃っています(センターを戻すMでそろって合う形)。' : "手順の最後には、U/D面のセンターがU/D面に来るようにM列も合わせます(その手も手数に入ります)。向きは、U/D色がU/D面を向いていれば合っている、とします(センターがM/M'ずれのときは、UF・UB・DF・DBのエッジはF/B面向きで合っている)。"}${cfg[k.by] === 'pos' ? '最短手数は問題文に表示されます。' : ''}</div>`;
+    : "CMLLまで終わった状態(U面センターはU面かD面)から、LSEのEOを揃える手順を U' U M' M のボタンで入力します。"}QSTM(90°を1手、180°は2手)で最短なら正解です。すべてのピースに色を付けます。${lr ? `U面センターがF/B面のままでも完成にできます。U面センターがU/D面のときは、6本ともU/D色がU/D面を向いていれば揃っています。U面センターがF/B面のときは、${lrb ? 'UF・UBのUL・URエッジはU色がU面' : 'DF・DBのUL・URエッジはU色がD面'}、残り4本はU/D色がU/D面以外を向いていれば揃っています(センターを戻すMでそろって合う形)。` : "手順の最後には、U/D面のセンターがU/D面に来るようにM列も合わせます(その手も手数に入ります)。向きは、U/D色がU/D面を向いていれば合っている、とします(センターがM/M'ずれのときは、UF・UB・DF・DBのエッジはF/B面向きで合っている)。"}${cfg[k.by] === 'pos' ? '最短手数は問題文に表示されます。' : ''}</div>`;
 }
 
 function genOpts(cfg) {
@@ -822,11 +830,11 @@ function playAlg(alg) {
 }
 
 // LSE EO / EOLR を入力した手順で揃えたか
-const lseSolves = (p, moves) => (p.eolr ? solvesEolr : solvesEo)(p.colors, moves);
+const lseSolves = (p, moves) => (p.eolrb ? solvesEolrb : p.eolr ? solvesEolr : solvesEo)(p.colors, moves);
 
 // LSE EO の解答例: QSTM で最短の手順
 function lseEoTable(p) {
-  const rows = p.lseSols.map((alg, i) => `<tr class="best" data-alg="${esc(alg)}">${i ? '' : `<th rowspan="${p.lseSols.length}" class="sq">${p.eolr ? 'EOLR' : 'EO'}</th>`}
+  const rows = p.lseSols.map((alg, i) => `<tr class="best" data-alg="${esc(alg)}">${i ? '' : `<th rowspan="${p.lseSols.length}" class="sq">${p.eolrb ? 'EOLRb' : p.eolr ? 'EOLR' : 'EO'}</th>`}
       <td class="n">★${p.optQ}手</td><td class="alg">${esc(u2p(alg))}</td></tr>`).join('');
   return `<div class="soltitle">QSTM(90°ごとに1手、180°は2手)</div><table class="soltab">${rows}</table>`;
 }
@@ -907,7 +915,7 @@ function answerSeq(btn) {
     quiz.okVia = '';
     app.querySelector('#seq').classList.add(ok ? 'correct' : 'wrong');
     hidePad();
-    settle(ok, btn.getBoundingClientRect(), done ? '揃いましたが最短ではありません' : p.eolr ? 'EOLRが揃っていません' : 'EOとセンターが揃っていません');
+    settle(ok, btn.getBoundingClientRect(), done ? '揃いましたが最短ではありません' : p.eolrb ? 'EOLRbが揃っていません' : p.eolr ? 'EOLRが揃っていません' : 'EOとセンターが揃っていません');
     return;
   }
   // STM・QSTM のどちらかで最短なら正解。揃っていても両方で手数が多ければ不正解
