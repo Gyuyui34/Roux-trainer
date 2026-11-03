@@ -23,15 +23,9 @@ export function eoState(cols) {
 }
 // 向きが悪い位置。センターが M/M' ずれのときは、M 列のエッジは U/D 色が F/B 面を向いていれば合っている
 export const badOf = (s) => s.ori.map((o, i) => (s.c % 2 && M_SLICE.includes(i) ? 1 - o : o));
-// U センターが U/D 面: 6 本とも U/D 色が U/D 面。
-// U センターが F/B 面: 向かい合う 2 か所(UF・UB / UL・UR / DF・DB のどれか)の 2 本だけ U/D 色が U/D 面で、残り 4 本は U/D 面以外(ユーザー指定 2026-11-03)。
-// この形なら U と M2 で 4 本を M 列に集め、センターを戻す M で 4 本がそろって合う
-const PAIRS = [[0, 1], [2, 3], [4, 5]];
-export const eoDoneOri = (ori, c) => (c % 2 === 0 ? ori.every((o) => !o)
-  : PAIRS.some(([a, b]) => ori.every((o, i) => o === (i === a || i === b ? 0 : 1))));
-export const eoDone = (s) => eoDoneOri(s.ori, s.c);
-// 練習の完成形: EO が揃っていれば完成(センターは U/D 面でも F/B 面でもよい)
-export const eoFinished = (s) => eoDone(s);
+export const eoDone = (s) => badOf(s).every((b) => !b);
+// 練習の完成形: EO が揃い、U/D のセンターが U/D 面にある(手順の最後に M 列も合わせる)
+export const eoFinished = (s) => s.c % 2 === 0 && eoDone(s);
 
 // 手の作用(ステッカーの置換から作る)
 const TABLE = MOVES.map((m) => {
