@@ -478,7 +478,7 @@ function lseEoOpts(cfg) {
     <div class="sub" style="${n ? '' : 'color:var(--ng)'}">${n ? `条件に合う形: ${n}通り(${lr ? 'エッジの位置と向き、' : ''}センターの位置も含む)` : 'この条件に合う形はありません。条件をゆるめてください'}</div>
     <div class="sub">${lr
     ? "CMLLまで終わった状態(U面センターはU面かD面)から、EOを揃えて、ULとURのエッジをU色がD面を向くようにDF・DBに入れる手順(どちらにどちらが入ってもよい)を U' U M' M のボタンで入力します。"
-    : "CMLLまで終わった状態(U面センターはU面かD面)から、LSEのEOを揃える手順を U' U M' M のボタンで入力します。"}QSTM(90°を1手、180°は2手)で最短なら正解です。すべてのピースに色を付けます。${lr ? '手順の最後には、U/D面のセンターがU/D面に来るようにM列も合わせます(その手も手数に入ります)。' : 'U面センターがF/B面にあるままでも、EOが揃っていれば完成です。'}向きは、U/D色がU/D面を向いていれば合っている、とします(センターがM/M'ずれのときは、UF・UB・DF・DBのエッジはF/B面向きで合っている)。${cfg[k.by] === 'pos' ? '最短手数は問題文に表示されます。' : ''}</div>`;
+    : "CMLLまで終わった状態(U面センターはU面かD面)から、LSEのEOを揃える手順を U' U M' M のボタンで入力します。"}QSTM(90°を1手、180°は2手)で最短なら正解です。すべてのピースに色を付けます。U面センターがF/B面のままでも完成にできます。U面センターがU/D面のときは、6本ともU/D色がU/D面を向いていれば揃っています。U面センターがF/B面のときは、${lr ? 'DF・DBのUL・URエッジはU色がD面、残り4本はU/D色がU/D面以外を向いていれば' : '向かい合う2か所(UF・UB / UL・UR / DF・DB のどれか)の2本だけU/D色がU/D面で、残り4本はU/D色がU/D面以外を向いていれば'}揃っています(センターを戻すMでそろって合う形)。${cfg[k.by] === 'pos' ? '最短手数は問題文に表示されます。' : ''}</div>`;
 }
 
 function genOpts(cfg) {
@@ -907,7 +907,7 @@ function answerSeq(btn) {
     quiz.okVia = '';
     app.querySelector('#seq').classList.add(ok ? 'correct' : 'wrong');
     hidePad();
-    settle(ok, btn.getBoundingClientRect(), done ? '揃いましたが最短ではありません' : p.eolr ? 'EOLRが揃っていません' : 'EOとセンターが揃っていません');
+    settle(ok, btn.getBoundingClientRect(), done ? '揃いましたが最短ではありません' : p.eolr ? 'EOLRが揃っていません' : 'EOが揃っていません');
     return;
   }
   // STM・QSTM のどちらかで最短なら正解。揃っていても両方で手数が多ければ不正解

@@ -235,7 +235,7 @@ for (const side of ['front', 'back']) {
     if (I.encS(E.fromColors(C.applyAlg(I.toColors(I.decR(x), 0), [E.MOVES[mi]]))) !== I.stepR(x, mi)) mism++;
   }
   check(!mism, `eolr move table ${mism}`);
-  check(E.EOLR_LENS[0] === 2 && E.EOLR_LENS.at(-1) === 13, `eolr lens ${E.EOLR_LENS}`);
+  check(E.EOLR_LENS[0] === 1 && E.EOLR_LENS.at(-1) === 13, `eolr lens ${E.EOLR_LENS}`);
   for (const n of E.EOLR_LENS) {
     for (let i = 0; i < (n <= 6 ? 5 : 2); i++) {
       const p = E.genEolr({ by: 'len', len: n });

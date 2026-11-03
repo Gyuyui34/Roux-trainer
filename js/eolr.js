@@ -94,8 +94,10 @@ function toColors(s, a) {
 // ---- 完成判定
 // 向きが悪い位置。センターが M/M' ずれのときは、UF・UB・DF・DB のエッジは U/D 色が F/B 面を向いていれば合っている
 export const badOf = (s) => s.ori.map((o, i) => (s.c % 2 && M_SLICE.includes(i) ? 1 - o : o));
-export const isEolr = (s) => s.c % 2 === 0 && badOf(s).every((b) => !b)
-  && [DF, DB].includes(s.perm.indexOf(UL)) && [DF, DB].includes(s.perm.indexOf(UR));
+// 完成: UL・UR の 2 本が DF・DB にあって U 色が D 面。残り 4 本は、U センターが U/D 面なら U/D 色が U/D 面、
+// U センターが F/B 面なら U/D 色が U/D 面以外(ユーザー指定 2026-11-03。センターを戻す M でそろって合う)
+export const isEolr = (s) => [DF, DB].includes(s.perm.indexOf(UL)) && [DF, DB].includes(s.perm.indexOf(UR))
+  && s.ori.every((o, i) => o === (i === DF || i === DB ? 0 : s.c % 2));
 
 // ---- 最短手数表(完成形からの幅優先探索。手の集合は逆手で閉じている)
 const DIST = new Int8Array(N).fill(-1);
