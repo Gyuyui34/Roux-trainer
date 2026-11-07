@@ -297,6 +297,33 @@ for (const [metric, lo, hi] of [['stm', 3, 5], ['qstm', 6, 9], ['stm', 2, 2], ['
   const n = metric === 'qstm' ? q.qOptLen : q.optLen;
   check(n >= lo && n <= hi, `sbSolve front range ${metric} ${lo}-${hi}: ${n}`);
 }
+// レート戦: SB 手数当ての短い方の QSTM がちょうど指定の手数
+for (const q of [2, 6, 11]) {
+  const p = generate('sbSq', { minLen: 2, maxLen: 11, metric: 'qstm', exactQ: q });
+  check(p.qOptLen === q, `sbSq exactQ ${q}: ${p.qOptLen}`);
+}
+// レートの計算(store.js は localStorage を使うので仮のものを置く)
+{
+  const mem = {};
+  globalThis.localStorage = { getItem: (k) => mem[k] ?? null, setItem: (k, v) => { mem[k] = v; } };
+  const S = await import('../js/store.js');
+  check(S.ratingOf('eolr').r === 1000, 'rating start');
+  const up = S.recordAnswer({ drill: 'eolr', caseKey: 'x', ok: true, mode: 'practice', combo: 0, rateQ: 10 }).rating;
+  const up2 = S.recordAnswer({ drill: 'eolr', caseKey: 'x', ok: true, mode: 'practice', combo: 0, rateQ: 3 }).rating;
+  check(up.delta > up2.delta && up2.delta >= 1, `harder correct gains more: ${up.delta} ${up2.delta}`);
+  const dn = S.recordAnswer({ drill: 'eolr', caseKey: 'x', ok: false, mode: 'practice', combo: 0, rateQ: 3 }).rating;
+  check(dn.delta < -30, `easy miss loses a lot: ${dn.delta}`);
+  check(S.recordAnswer({ drill: 'eolr', caseKey: 'x', ok: true, mode: 'review', combo: 0, rateQ: 5 }).rating === null, 'review not rated');
+  check(S.recordAnswer({ drill: 'cmll', caseKey: 'x', ok: true, mode: 'practice', combo: 0, rateQ: 5 }).rating === null, 'cmll not rated');
+  check(S.ratingOf('eolr').n === 3 && S.ratingOf('eolr').hist.length === 3, 'rating history');
+  // ずっと 6 手の問題を半分正解すると 1000 付近に落ち着く
+  let ev = [];
+  for (let i = 0; i < 400; i++) ev.push(...S.recordAnswer({ drill: 'lseEo', caseKey: 'x', ok: i % 2 === 0, mode: 'test', combo: 0, rateQ: 6 }).events);
+  check(Math.abs(S.ratingOf('lseEo').r - 1000) < 40, `converges ${S.ratingOf('lseEo').r}`);
+  for (let i = 0; i < 40; i++) ev.push(...S.recordAnswer({ drill: 'lseEo', caseKey: 'x', ok: true, mode: 'practice', combo: 0, rateQ: 12 }).events);
+  check(ev.some((e) => e.type === 'rankup'), 'rankup event');
+  check(S.rankOf(799).name === 'ブロンズ' && S.rankOf(1000).name === 'ゴールド', 'ranks');
+}
 console.log('cmllEo bad-edge counts', JSON.stringify(dist));
 console.log(fail ? `${fail} failures` : 'all passed');
 process.exit(fail ? 1 : 0);

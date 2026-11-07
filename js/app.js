@@ -175,6 +175,12 @@ function handleEvents(events) {
       showModal(`<div class="huge">⭐</div><h3>レベルアップ!</h3><div class="reward">Lv.${ev.level}</div>`);
     }
     if (ev.type === 'badge') toast(`🏅 バッジ獲得「${ev.badge.name}」`);
+    if (ev.type === 'rankup') {
+      FX.sfxFanfare();
+      FX.confetti(120);
+      showModal(`<div class="huge">${ev.rank.icon}</div><h3>${RATE_NAME[ev.drill] || ev.drill} 昇格!</h3>
+        <div class="reward">${ev.rank.name}</div><div class="sub">レート ${ev.r}</div>`);
+    }
   }
 }
 
@@ -200,6 +206,10 @@ function renderHome() {
   const sqQ = cfg.sbSqMetric === 'qstm';
   const sbMin = sqQ ? cfg.sbMinQ : cfg.sbMin, sbMax = sqQ ? cfg.sbMaxQ : cfg.sbMax;
   const sqLens = sqQ ? SB_LENS_Q : SB_LENS;
+  const rateDrill = !isLearn && RATE_MENUS[cfg.menu];
+  const rt = rateDrill ? S.ratingOf(rateDrill) : null;
+  const rToday = rateDrill ? S.ratingToday(rateDrill) : 0;
+  const nextRank = rateDrill ? S.RANKS[S.rankIndex(rt.r) + 1] : null;
   app.innerHTML = `
     <div class="row between" style="margin-bottom:12px">
       <div class="row"><div class="lvl"><span>Lv</span><b>${lv.level}</b></div>
@@ -259,6 +269,11 @@ function renderHome() {
     <div class="row" style="justify-content:center;gap:8px" id="testn">
       <span class="sub">テスト問題数</span>${[10, 20, 42].map((n) => `<button class="chip ${cfg.testN === n ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}
     </div>`}
+    ${rateDrill ? `<div class="card ratecard"><div class="row between">
+      <div><div class="sub">${RATE_NAME[rateDrill]} のレート</div><div class="big">${rt.r}<span class="rtoday ${rToday >= 0 ? 'up' : 'down'}">今日 ${signed(rToday)}</span></div></div>
+      <div style="text-align:right">${rankBadge(rt.r)}<div class="sub" style="margin-top:4px">${nextRank ? `${nextRank.name}まで あと${nextRank.min - rt.r}` : '最高段位'}</div><div class="sub">最高 ${rt.best} ・ ${rt.n}問</div></div></div>
+      <button class="btn rated" id="go-rated">⚔ レート戦<small>今のレートに合う難しさ(最短 QSTM ${Math.max(1, Math.round(S.lenForRating(rt.r)))}手前後)で自動出題${cfg.menu === 'sbSolve' ? ` ・ ${cfg.sbSide === 'both' ? 'Front/Backの短い方' : SQ_LABEL[cfg.sbSide]}` : ''}</small></button>
+      <div class="sub">難しい問題(最短手数が多い問題)に正解するほど大きく上がり、簡単な問題を間違えると大きく下がります。通常の練習とテストでも動きます。</div></div>` : ''}
   `;
   const update = (patch) => { S.setLastPractice({ ...practiceCfg(), ...patch }); renderHome(); };
   app.querySelector('#menu').onclick = (e) => { const b = e.target.closest('[data-menu]'); if (b) update({ menu: b.dataset.menu }); };
@@ -266,6 +281,7 @@ function renderHome() {
     app.querySelector('#go-learn').onclick = () => openLearn(learnSideFix(practiceCfg()));
   } else {
     app.querySelector('#go-practice').onclick = () => startQuiz('practice');
+    if (rateDrill) app.querySelector('#go-rated').onclick = () => startQuiz('practice', { ...practiceCfg(), rated: true });
     app.querySelector('#go-test').onclick = () => startQuiz('test');
     app.querySelector('#go-review').onclick = () => startQuiz('review');
     app.querySelector('#testn').onclick = (e) => { const b = e.target.closest('[data-n]'); if (b) update({ testN: Number(b.dataset.n) }); };
@@ -489,7 +505,35 @@ function lseEoOpts(cfg) {
     : "CMLLまで終わった状態(U面センターはU面かD面)から、LSEのEOを揃える手順を U' U M' M のボタンで入力します。"}QSTM(90°を1手、180°は2手)で最短なら正解です。すべてのピースに色を付けます。${lr ? `U面センターがF/B面のままでも完成にできます。U面センターがU/D面のときは、6本ともU/D色がU/D面を向いていれば揃っています。U面センターがF/B面のときは、${lrb ? 'UF・UBのUL・URエッジはU色がU面' : 'DF・DBのUL・URエッジはU色がD面'}、残り4本はU/D色がU/D面以外を向いていれば揃っています(センターを戻すMでそろって合う形)。` : "手順の最後には、U/D面のセンターがU/D面に来るようにM列も合わせます(その手も手数に入ります)。向きは、U/D色がU/D面を向いていれば合っている、とします(センターがM/M'ずれのときは、UF・UB・DF・DBのエッジはF/B面向きで合っている)。"}${cfg[k.by] === 'pos' ? '最短手数は問題文に表示されます。' : ''}</div>`;
 }
 
+// ---------- レート ----------
+const RATE_MENUS = { sb: 'sbSq', sbSolve: 'sbSolve', lseEo: 'lseEo', eolr: 'eolr', eolrb: 'eolrb' };
+const RATE_NAME = { sbSq: 'SB 手数当て', sbSolve: 'SB 手順入力', lseEo: 'LSE EO', eolr: 'EOLR', eolrb: 'EOLRb' };
+const SB_Q_LENS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+// レート戦で出せる最短手数(QSTM)
+const ratedLens = (drill) => ({ sbSq: SB_Q_LENS, sbSolve: SB_Q_LENS, lseEo: START_LENS, eolr: EOLR_LENS, eolrb: eolrbLens() })[drill];
+// 問題の難易度(最短手数 QSTM)。わからない問題は null(レート対象外)
+const rateQOf = (p) => p.optQ ?? p.qOptLen ?? null;
+// 自分のレートに合う手数のまわりから、近いほど出やすく選ぶ
+function pickRatedLen(drill) {
+  const t = S.lenForRating(S.ratingOf(drill).r);
+  const lens = ratedLens(drill);
+  const w = lens.map((q) => Math.exp(-((q - t) ** 2) / (2 * 0.8 * 0.8)));
+  let x = Math.random() * w.reduce((a, v) => a + v, 0);
+  for (let i = 0; i < lens.length; i++) { x -= w[i]; if (x <= 0) return lens[i]; }
+  return lens[lens.length - 1];
+}
+function ratedOpts(cfg) {
+  const drill = RATE_MENUS[cfg.menu];
+  const q = pickRatedLen(drill);
+  if (drill === 'sbSq') return { minLen: 2, maxLen: 11, metric: 'qstm', exactQ: q };
+  if (drill === 'sbSolve') return { len: q, lenMax: q, side: cfg.sbSide, metric: 'qstm' };
+  return { by: 'len', len: q };
+}
+const rankBadge = (r) => { const k = S.rankOf(r); return `<span class="rank r${S.rankIndex(r)}">${k.icon} ${k.name}</span>`; };
+const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `${n}` : '±0');
+
 function genOpts(cfg) {
+  if (cfg.rated) return ratedOpts(cfg);
   if (EO_KIT[cfg.menu]) return lseEoCond(cfg);
   if (cfg.menu === 'sb') return cfg.sbSqMetric === 'qstm' ? { minLen: cfg.sbMinQ, maxLen: cfg.sbMaxQ, metric: 'qstm' } : { minLen: cfg.sbMin, maxLen: cfg.sbMax };
   if (cfg.caseNo != null) return { side: cfg.sbSide, caseNo: cfg.caseNo };
@@ -531,7 +575,7 @@ function startQuiz(mode, override = null) {
 }
 
 function buildQuizView() {
-  const title = { practice: '練習', test: 'テスト', review: '復習' }[quiz.mode];
+  const title = quiz.cfg.rated ? '⚔ レート戦' : { practice: '練習', test: 'テスト', review: '復習' }[quiz.mode];
   app.innerHTML = `
     <div class="quiz-top">
       <button class="x" id="quit">✕</button>
@@ -710,7 +754,7 @@ function nextProblem() {
   app.querySelector('#feedback').innerHTML = p.sbSols || p.lseEo ? '<button class="btn" id="reveal">答えを見る<small>不正解として記録されます</small></button>' : '';
   if (p.sbSols || p.lseEo) app.querySelector('#reveal').onclick = reveal;
   const qc = app.querySelector('#qcount');
-  qc.textContent = quiz.total ? `${quiz.idx + 1} / ${quiz.total}` : `${quiz.idx + 1}問目 ・ 正解 ${quiz.correct}`;
+  qc.textContent = quiz.total ? `${quiz.idx + 1} / ${quiz.total}` : `${quiz.idx + 1}問目 ・ 正解 ${quiz.correct}${quiz.cfg.rated ? ` ・ レート ${S.ratingOf(quiz.drill).r}` : ''}`;
   const prog = app.querySelector('#qprog');
   if (prog) prog.style.width = `${pct(quiz.idx, quiz.total)}%`;
   updateCombo(false);
@@ -759,12 +803,15 @@ function settle(ok, rect, wrongMsg) {
   if (ok) { quiz.correct++; quiz.combo++; quiz.maxCombo = Math.max(quiz.maxCombo, quiz.combo); FX.sfxCorrect(quiz.combo); } else { quiz.combo = 0; FX.sfxWrong(); }
 
   const stored = { ...p, colors: p.colors.join('') };
-  const { gained, events } = S.recordAnswer({
+  const { gained, events, rating } = S.recordAnswer({
     drill: p.drill || quiz.drill, caseKey: p.caseKey, ok, mode: quiz.mode === 'test' ? 'test' : quiz.mode === 'review' ? 'review' : 'practice', combo: quiz.combo,
     problem: ok || quiz.mode === 'review' ? null : stored,
     timeMs: quiz.mode === 'review' ? 0 : performance.now() - quiz.shownT,
     sbCase: p.caseNo != null && p.square ? `${p.square}#${p.caseNo}` : null,
+    // 学習の「このケースを練習」は同じケースの繰り返しなのでレートは動かさない
+    rateQ: quiz.cfg.caseNo != null ? null : rateQOf(p),
   });
+  if (rating) { quiz.rateDelta = (quiz.rateDelta || 0) + rating.delta; quiz.rateNow = rating.after; }
   quiz.xp += gained;
   if (quiz.mode === 'review' && ok) S.removeMistake(quiz.mistakesIds[quiz.idx]);
   const r = rect;
@@ -788,6 +835,7 @@ function settle(ok, rect, wrongMsg) {
   // 手順入力ではボタンを隠すので、アニメーションが見えるよう少しだけ小さくする
   if (anim) app.querySelector('#scene').classList.add('anim-view');
   fb.innerHTML = `<div class="row between"><div><div class="res ${ok ? 'ok' : 'ng'}">${ok ? (quiz.combo >= 3 ? `正解!🔥×${quiz.combo}` : '正解!') : wrongMsg}${ok && p.inputPad && quiz.okVia ? `<span class="via">${quiz.okVia}</span>` : ''}</div>
+    ${rating ? `<div class="rdelta ${rating.delta >= 0 ? 'up' : 'down'}">レート ${rating.before} → <b>${rating.after}</b>(${signed(rating.delta)})<span class="sub"> 難易度 ${S.diffRating(rating.q)}</span></div>` : ''}
     ${p.inputPad && quiz.seq.length ? seqSummary(p) : ''}
     ${anim ? '' : `<div class="sub mono">${esc(p.explain)}</div>`}</div>
     ${autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
@@ -1085,6 +1133,7 @@ function renderResult({ timeMs, pb, prev }) {
         <div><div class="sub">正解</div><div class="big">${q.correct}/${q.total}</div></div>
         <div><div class="sub">獲得</div><div class="big" style="color:var(--accent)">+${q.xp}</div></div>
       </div>
+      ${q.rateNow != null ? `<div class="rdelta ${q.rateDelta >= 0 ? 'up' : 'down'}" style="margin-top:12px">レート <b>${q.rateNow}</b>(${signed(q.rateDelta)}) ${rankBadge(q.rateNow)}</div>` : ''}
     </div>
     ${q.mode === 'test' ? '<button class="btn primary" id="again">もう一度挑戦</button>' : ''}
     <button class="btn" id="home">ホームへ</button>
@@ -1098,7 +1147,7 @@ function endQuiz() {
   stopAnim();
   const q = quiz;
   quiz = null;
-  if (q && q.mode === 'practice' && q.idx > 0) toast(`おつかれさま!${q.idx}問 ・ 正答率${pct(q.correct, q.idx)}% ・ +${q.xp} XP`);
+  if (q && q.mode === 'practice' && q.idx > 0) toast(`おつかれさま!${q.idx}問 ・ 正答率${pct(q.correct, q.idx)}% ・ +${q.xp} XP${q.rateNow != null ? ` ・ レート ${q.rateNow}(${signed(q.rateDelta)})` : ''}`);
   render();
 }
 
@@ -1258,11 +1307,11 @@ function renderLearnDetail() {
 
 // ---------------- 記録 ----------------
 function renderHistory() {
-  const tabs = { calendar: '日別', tests: 'タイム', cases: 'ケース別', review: '復習', badges: 'バッジ' };
+  const tabs = { calendar: '日別', rate: 'レート', tests: 'タイム', cases: 'ケース別', review: '復習', badges: 'バッジ' };
   app.innerHTML = `<h1>記録</h1><div class="seg">${Object.entries(tabs).map(([k, v]) => `<button data-h="${k}" class="${historyTab === k ? 'on' : ''}">${v}</button>`).join('')}</div><div id="hbody"></div>`;
   app.querySelector('.seg').onclick = (e) => { const b = e.target.closest('[data-h]'); if (b) { historyTab = b.dataset.h; renderHistory(); } };
   const body = app.querySelector('#hbody');
-  ({ calendar: histCalendar, tests: histTests, cases: histCases, review: histReview, badges: histBadges })[historyTab](body);
+  ({ calendar: histCalendar, rate: histRate, tests: histTests, cases: histCases, review: histReview, badges: histBadges })[historyTab](body);
 }
 
 function dayTotal(d) {
@@ -1310,6 +1359,41 @@ function histCalendar(body) {
     <h2>${selectedDay.replace(/-/g, '/')}${selectedDay === todayK ? '(今日)' : ''}</h2>
     <div class="card">${detail}</div>`;
   body.querySelector('#heat').onclick = (e) => { const c = e.target.closest('[data-d]'); if (c) { selectedDay = c.dataset.d; renderHistory(); } };
+}
+
+// モードごとのレートの推移
+function histRate(body) {
+  const list = S.RATED.map((d) => ({ d, x: S.ratingOf(d) })).filter((o) => o.x.n > 0);
+  body.innerHTML = `<div class="sub" style="margin-bottom:8px">問題の難易度は最短手数(QSTM)で決まります(2手=600、1手ごとに+100)。自分のレートより難しい問題に正解すると大きく上がり、簡単な問題を間違えると大きく下がります。復習と、SB学習の「このケースを練習」では動きません。</div>
+    <div class="card"><table><tr><th>段位</th><th class="r">レート</th></tr>${S.RANKS.map((k, i) => `<tr><td><span class="rank r${i}">${k.icon} ${k.name}</span></td><td class="r mono">${k.min ? `${k.min}〜` : '〜799'}</td></tr>`).join('')}</table></div>
+    ${list.length ? list.map(({ d, x }) => `<div class="card">
+      <div class="row between"><div><b>${RATE_NAME[d]}</b><div class="sub">${x.n}問 ・ 最高 ${x.best} ・ 今日 ${signed(S.ratingToday(d))}</div></div>
+      <div style="text-align:right"><div class="big">${x.r}</div>${rankBadge(x.r)}</div></div>
+      ${rateChart(x.hist)}</div>`).join('') : '<div class="empty">まだレートの記録がありません。<br>SB・LSE EO・EOLR・EOLRb の問題に答えるとレートが付きます。</div>'}`;
+}
+
+function rateChart(hist) {
+  const pts = hist.slice(-100);
+  if (pts.length < 2) return '<div class="sub" style="padding:6px 0">2問以上解くとグラフが表示されます</div>';
+  const W = 320, H = 120, L = 36, R = 8, T = 10, B = 16;
+  const v = pts.map((t) => t[1]);
+  const max = Math.max(...v), min = Math.min(...v);
+  const span = max - min || 1;
+  const x = (i) => L + (i * (W - L - R)) / (pts.length - 1);
+  const y = (r) => H - B - ((r - min) / span) * (H - T - B);
+  const path = v.map((r, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(r).toFixed(1)}`).join(' ');
+  const day = (t) => { const d = new Date(t[0]); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  // 段位の境目の線
+  const lines = S.RANKS.filter((k) => k.min > min && k.min < max).map((k) => `<line x1="${L}" x2="${W - R}" y1="${y(k.min).toFixed(1)}" y2="${y(k.min).toFixed(1)}" stroke="#9aa3b5" stroke-opacity=".35" stroke-dasharray="3 3"/><text x="${W - R}" y="${(y(k.min) - 3).toFixed(1)}" fill="#9aa3b5" font-size="9" text-anchor="end">${k.name}</text>`).join('');
+  return `<svg class="chart small" viewBox="0 0 ${W} ${H}">
+    ${lines}
+    <text x="${L - 4}" y="${y(max) + 4}" fill="#9aa3b5" font-size="10" text-anchor="end">${max}</text>
+    <text x="${L - 4}" y="${y(min) + 4}" fill="#9aa3b5" font-size="10" text-anchor="end">${min}</text>
+    <text x="${L}" y="${H - 2}" fill="#9aa3b5" font-size="10">${day(pts[0])}</text>
+    <text x="${W - R}" y="${H - 2}" fill="#9aa3b5" font-size="10" text-anchor="end">${day(pts[pts.length - 1])}</text>
+    <path d="${path}" fill="none" stroke="#4c8dff" stroke-width="2" stroke-linejoin="round"/>
+    ${pts.length <= 40 ? pts.map((t, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v[i]).toFixed(1)}" r="3" fill="${t[2] ? '#2ecc71' : '#ff5a5a'}"/>`).join('') : ''}
+  </svg>`;
 }
 
 let timeSrc = 'test';

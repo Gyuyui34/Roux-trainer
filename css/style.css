@@ -288,3 +288,14 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .lcap .done { color: var(--text); }
 .lcap .pause { display: none; }
 .lcap .cur { color: #1a1300; background: var(--accent); border-radius: 4px; padding: 0 2px; }
+
+/* レート */
+.ratecard .big { line-height: 1.1; }
+.rtoday { font-size: 13px; font-weight: 800; margin-left: 8px; }
+.rtoday.up, .rdelta.up b { color: var(--ok); }
+.rtoday.down, .rdelta.down b { color: var(--ng); }
+.btn.rated { background: linear-gradient(135deg, #b14cff, #ff4c8d); border: 0; box-shadow: 0 4px 0 #7a2a8a; margin: 12px 0 8px; }
+.rdelta { font-size: 14px; font-weight: 700; margin-top: 2px; }
+.rank { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: var(--panel2); white-space: nowrap; }
+.rank.r0 { color: #d39a6a; } .rank.r1 { color: #c9d1dc; } .rank.r2 { color: #ffcc33; } .rank.r3 { color: #7fe3e0; }
+.rank.r4 { color: #8fc7ff; } .rank.r5 { color: #d58cff; } .rank.r6 { color: #ff7b7b; }

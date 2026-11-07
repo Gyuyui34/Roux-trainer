@@ -17,6 +17,7 @@ function emptyData() {
     caseTimes: {},
     mistakes: [],
     tests: [],
+    ratings: {},
     badges: {},
     lastOpenDay: null,
     lastPractice: null,
@@ -103,8 +104,10 @@ export function openToday() {
 // ---------- 解答の記録 ----------
 const COMBO_CAP = 10;
 
-export function recordAnswer({ drill, caseKey, ok, mode, combo, problem, timeMs, sbCase }) {
+export function recordAnswer({ drill, caseKey, ok, mode, combo, problem, timeMs, sbCase, rateQ }) {
   const events = [];
+  // レート: 最短手数(QSTM)がわかる問題だけ。復習は対象外
+  const rating = rateQ != null && RATED.includes(drill) && mode !== 'review' ? applyRating(drill, rateQ, ok, events) : null;
   // SB の square の置き方ごとの記録(学習モードの詳細で見る)
   if (sbCase) {
     const c = ((data.sbCaseStats ||= {})[sbCase] ||= { n: 0, correct: 0 });
@@ -150,7 +153,7 @@ export function recordAnswer({ drill, caseKey, ok, mode, combo, problem, timeMs,
   }
   checkBadges(events);
   save();
-  return { gained, events };
+  return { gained, events, rating };
 }
 
 export function removeMistake(id) {
@@ -177,6 +180,57 @@ export function recordTest({ drill, cfg, n, correct, timeMs }) {
 export function bestTest(key) {
   return data.tests.filter((t) => t.key === key && t.correct / t.n >= 0.9)
     .reduce((b, t) => (!b || t.timeMs < b.timeMs ? t : b), null);
+}
+
+// ---------- レート(イロレート風) ----------
+// モードごとに 1 つ。問題の難易度レートは最短手数(QSTM)から決める: 2手=600、1手増えるごとに +100
+export const RATED = ['sbSq', 'sbSolve', 'lseEo', 'eolr', 'eolrb'];
+export const RATING_START = 1000;
+export const diffRating = (q) => 400 + 100 * q;
+// レートに合う最短手数(この手数の問題で正解率がちょうど 50%)
+export const lenForRating = (r) => (r - 400) / 100;
+export const RANKS = [
+  { min: 0, name: 'ブロンズ', icon: '🥉' },
+  { min: 800, name: 'シルバー', icon: '🥈' },
+  { min: 1000, name: 'ゴールド', icon: '🥇' },
+  { min: 1200, name: 'プラチナ', icon: '💠' },
+  { min: 1400, name: 'ダイヤ', icon: '💎' },
+  { min: 1600, name: 'マスター', icon: '👑' },
+  { min: 1800, name: 'グランドマスター', icon: '🏆' },
+];
+export const rankIndex = (r) => RANKS.reduce((a, x, i) => (r >= x.min ? i : a), 0);
+export const rankOf = (r) => RANKS[rankIndex(r)];
+// 正解できそうな確率
+export const expectScore = (r, q) => 1 / (1 + 10 ** ((diffRating(q) - r) / 400));
+
+export function ratingOf(drill) {
+  const x = (data.ratings || {})[drill];
+  return x || { r: RATING_START, n: 0, best: RATING_START, peakRank: rankIndex(RATING_START), hist: [] };
+}
+// 今日のレートの増減
+export const ratingToday = (drill) => (today().rate || {})[drill] || 0;
+
+function applyRating(drill, q, ok, events) {
+  data.ratings ||= {};
+  const x = (data.ratings[drill] ||= ratingOf(drill));
+  const before = x.r;
+  // 最初の 30 問は早く実力に近づくよう大きめに動かす
+  const K = x.n < 30 ? 48 : 32;
+  let delta = Math.round(K * ((ok ? 1 : 0) - expectScore(before, q)));
+  if (ok && delta < 1) delta = 1;
+  if (!ok && delta > -1) delta = -1;
+  x.r = Math.max(100, before + delta);
+  delta = x.r - before;
+  x.n++;
+  x.best = Math.max(x.best, x.r);
+  x.hist.push([Date.now(), x.r, ok ? 1 : 0, q]);
+  if (x.hist.length > 300) x.hist.splice(0, x.hist.length - 300);
+  const t = today();
+  (t.rate ||= {})[drill] = (t.rate[drill] || 0) + delta;
+  // 段位が今までの最高を超えたときだけ演出する
+  const ri = rankIndex(x.r);
+  if (ri > (x.peakRank ?? 0)) { x.peakRank = ri; events.push({ type: 'rankup', drill, rank: RANKS[ri], r: x.r }); }
+  return { before, after: x.r, delta, q };
 }
 
 // ---------- バッジ ----------

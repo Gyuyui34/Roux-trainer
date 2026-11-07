@@ -531,12 +531,15 @@ function genSbSquare(opts = {}) {
   const qstm = opts.metric === 'qstm';
   const dist = qstm ? sqQDist : sqDist;
   const minLen = Math.max(2, opts.minLen || 2), maxLen = Math.max(minLen, opts.maxLen || 99);
-  for (let attempt = 0; attempt < 40000; attempt++) {
+  for (let attempt = 0; attempt < (opts.exactQ ? 200000 : 40000); attempt++) {
     const { scramble, tracked } = sbScramble();
     // 表の値がそのまま最短手数なので、範囲外の盤面は解を探す前に捨てる
     const lens = Object.fromEntries(Object.keys(SQUARES).map((k) => [k, dist(tracked, k)]));
     const best = Math.min(...Object.values(lens));
     if (best < minLen || best > maxLen || best < 2) continue;
+    // レート戦: 短い方の QSTM がちょうど exactQ 手の盤面だけ
+    const qBest = qstm ? best : Math.min(...Object.keys(SQUARES).map((k) => sqQDist(tracked, k)));
+    if (opts.exactQ && qBest !== opts.exactQ) continue;
     const res = Object.keys(SQUARES).map((k) => ({ ...sqSolutions(tracked, k), qlen: sqQDist(tracked, k) }));
     const squares = Object.keys(SQUARES).filter((k) => lens[k] === best);
     // 選択肢: 正解の前後の手数から 4 つ(小さい順)
@@ -561,6 +564,7 @@ function genSbSquare(opts = {}) {
       rowName: 'square',
       aufAnswers: squares,
       caseKey: qstm ? `QSTM${best}手` : `${best}手`,
+      qOptLen: qBest,
       metric: qstm ? 'qstm' : 'stm',
       explain: `最短 ${qstm ? 'QSTM ' : ''}${best}手(${squares.map((k) => SQUARES[k].name).join(' / ')})。${res.map(fmt).join('、')}`,
     };
