@@ -138,12 +138,16 @@ function openNextModal() {
   const m = modalQueue[0];
   if (!m) return;
   modalRoot.innerHTML = `<div class="modal-bg"><div class="modal">${m.html}<button class="btn primary" data-close>OK</button></div></div>`;
-  modalRoot.querySelector('[data-close]').onclick = () => {
+  let done = false;
+  const close = () => {
+    if (done) return;
+    done = true;
     modalRoot.innerHTML = '';
     modalQueue.shift();
     if (m.onClose) m.onClose();
     openNextModal();
   };
+  modalRoot.querySelector('[data-close]').onclick = close;
 }
 
 function stampCard(streakDay, todayDone) {
@@ -160,8 +164,23 @@ function stampCard(streakDay, todayDone) {
   return html + '</div>';
 }
 
-function handleEvents(events) {
+// 同じ種類の演出がいくつもたまったとき(テスト中に何度もレベルアップしたときなど)は 1 つにまとめる。
+// まとめないと同じ見た目のポップアップが続き、OK を押しても閉じないように見える
+function mergeEvents(events) {
+  const out = [];
   for (const ev of events) {
+    const same = ev.type === 'levelup' ? out.find((x) => x.type === 'levelup')
+      : ev.type === 'rankup' ? out.find((x) => x.type === 'rankup' && x.drill === ev.drill)
+        : ev.type === 'goal' ? out.find((x) => x.type === 'goal') : null;
+    if (!same) { out.push({ ...ev }); continue; }
+    if (ev.type === 'levelup') { same.from = Math.min(same.from ?? same.level, ev.level); same.level = Math.max(same.level, ev.level); }
+    if (ev.type === 'rankup' && ev.r > same.r) { same.rank = ev.rank; same.r = ev.r; }
+  }
+  return out;
+}
+
+function handleEvents(events) {
+  for (const ev of mergeEvents(events)) {
     if (ev.type === 'goal') {
       FX.sfxFanfare();
       FX.confetti();
@@ -1548,10 +1567,13 @@ function renderAlgs() {
   app.querySelectorAll('.algrow').forEach((b) => { b.onclick = () => openAlgEditor(CMLL_CASES.find((c) => c.name === b.dataset.case)); });
 }
 
+// 確認や編集のシートは演出のポップアップとは別の場所に出す(同じ場所だと、出ているポップアップを消してしまい、その後のポップアップが出なくなる)
+const sheetRoot = document.createElement('div');
+document.body.appendChild(sheetRoot);
 function openSheet(html, bind) {
-  modalRoot.innerHTML = `<div class="modal-bg"><div class="modal" style="text-align:left">${html}</div></div>`;
-  const close = () => { modalRoot.innerHTML = ''; };
-  bind(modalRoot.querySelector('.modal'), close);
+  sheetRoot.innerHTML = `<div class="modal-bg"><div class="modal" style="text-align:left">${html}</div></div>`;
+  const close = () => { sheetRoot.innerHTML = ''; };
+  bind(sheetRoot.querySelector('.modal'), close);
 }
 
 // confirm() はホーム画面アプリや埋め込み表示で使えないことがあるため、画面内で確認する

@@ -300,3 +300,4 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .rank { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: var(--panel2); white-space: nowrap; }
 .rank.r0 { color: #d39a6a; } .rank.r1 { color: #c9d1dc; } .rank.r2 { color: #ffcc33; } .rank.r3 { color: #7fe3e0; }
 .rank.r4 { color: #8fc7ff; } .rank.r5 { color: #d58cff; } .rank.r6 { color: #ff7b7b; }
+#modal-root .modal-bg { z-index: 56; }
