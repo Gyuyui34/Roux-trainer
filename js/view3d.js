@@ -128,6 +128,12 @@ export class CubeView {
     });
   }
 
+  // 指定したステッカー(番号の集合)に印を付ける(SB 検索でピースを置ける場所)
+  setMarks(set) {
+    this.stickerEls.forEach((el, i) => el.classList.toggle('cand', !!set && set.has(i)));
+    if (this.back) this.back.setMarks(set);
+  }
+
   // 層を回すアニメーション。手 m の層をまとめ、progress(0〜1)で回転角を決める。
   // tween で好きな位置まで動かし、stopTween でその場に止められる(途中で一時停止できる)
   // "U2'" のように 2' と書いた手は ' の向きに 180° 回す
@@ -236,7 +242,13 @@ export class CubeView {
     });
     const end = () => { last = null; };
     this.host.addEventListener('pointerup', (e) => {
-      if (start && moved < 10 && this.onTap) {
+      // onTapSticker があれば、タップしたステッカーの番号を渡す(手を回していないときはタイルの番号 = ステッカーの位置)
+      if (start && moved < 10 && this.onTapSticker && !this.moving) {
+        const hit = document.elementFromPoint(e.clientX, e.clientY);
+        const tile = hit && hit.closest('.tile');
+        const i = tile ? this.tileEls.indexOf(tile) : -1;
+        if (i >= 0) this.onTapSticker(i);
+      } else if (start && moved < 10 && this.onTap) {
         let l = Infinity, r = -Infinity;
         for (const el of this.tileEls) { const b = el.getBoundingClientRect(); l = Math.min(l, b.left); r = Math.max(r, b.right); }
         this.onTap(e.clientX < l ? -1 : e.clientX > r ? 1 : 0);

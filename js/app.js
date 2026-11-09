@@ -1,6 +1,6 @@
 import * as S from './store.js';
 import * as FX from './fx.js';
-import { generate, DRILLS, CMLL_CASES, identifyCmll, solvesCase, solvesSquare, mergeMoves, qtmLen, DR_POSITIONS, DR_ORIS, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext } from './drills.js';
+import { generate, DRILLS, CMLL_CASES, identifyCmll, solvesCase, solvesSquare, mergeMoves, qtmLen, DR_POSITIONS, DR_ORIS, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext, sbSearch, sbPlaceSpots, slotOf, SEARCH_PIECES } from './drills.js';
 import { CMLL_SETS } from './cmll.js';
 import { CubeView, ORIENTATIONS, COLOR_JA, COLOR_HEX, schemeFor } from './view3d.js';
 import { applyAlg, solved } from './cube.js';
@@ -24,7 +24,7 @@ const drillOf = (cfg) => {
   if (cfg.menu === 'lseEo') return 'lseEo';
   if (cfg.menu === 'eolr') return 'eolr';
   if (cfg.menu === 'eolrb') return 'eolrb';
-  if (cfg.menu === 'sbSolve' || cfg.menu === 'sbLearn') return 'sbSolve';
+  if (cfg.menu === 'sbSolve' || cfg.menu === 'sbLearn' || cfg.menu === 'sbSearch') return 'sbSolve';
   const base = cfg.kind === 'eo' ? (cfg.auf === 'random' ? 'cmllEoAuf' : 'cmllEo') : (cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
   return S.get().settings.algSlot === 'oh' ? `${base}Oh` : base;
 };
@@ -34,7 +34,7 @@ const cfgLabel = (key) => (key === 'all' ? '全ケース' : key.startsWith('case
 const baseDrill = (k) => k.replace(/Oh$/, '');
 // 今はないモード(記録だけ残っているもの)は名前をそのまま出す
 const drillName = (k) => (!DRILLS[baseDrill(k)] ? k : DRILLS[baseDrill(k)].noSlot ? DRILLS[k].name : `${DRILLS[baseDrill(k)].name}・${k.endsWith('Oh') ? '片手' : '両手'}`);
-const MENU_LABEL = { cmll: 'CMLL', sb: 'SB 手数当て', sbSolve: 'SB 手順入力', sbLearn: 'SB 学習', lseEo: 'LSE EO', eolr: 'EOLR', eolrb: 'EOLRb' };
+const MENU_LABEL = { cmll: 'CMLL', sb: 'SB 手数当て', sbSolve: 'SB 手順入力', sbLearn: 'SB 学習', sbSearch: 'SB 検索', lseEo: 'LSE EO', eolr: 'EOLR', eolrb: 'EOLRb' };
 const SQ_LABEL = { front: 'Front square', back: 'Back square' };
 // 並び: U' | U | r / r' | R / R' (U' と U は縦 2 段分)
 const PAD_MOVES = ["U'", 'U', "M'", 'r', 'R', 'M', "r'", "R'"];
@@ -114,7 +114,7 @@ function render() {
   if (quiz) return;
   if (pendingReload && !learn) { location.reload(); return; }
   window.scrollTo(0, 0);
-  if (learn) { learn.detail != null ? renderLearnDetail() : renderLearn(); return; }
+  if (learn) { learn.mode === 'search' ? renderSearch() : learn.detail != null ? renderLearnDetail() : renderLearn(); return; }
   if (tab === 'home') renderHome();
   if (tab === 'history') renderHistory();
   if (tab === 'settings') renderSettings();
@@ -218,6 +218,7 @@ function renderHome() {
   const reviewN = liveMistakes().length;
   const isSb = cfg.menu === 'sb';
   const isLearn = cfg.menu === 'sbLearn';
+  const isSearch = cfg.menu === 'sbSearch';
   const isSolve = cfg.menu === 'sbSolve' || isLearn;
   const isEo = !!EO_KIT[cfg.menu];
   const kit = EO_KIT[cfg.menu];
@@ -253,7 +254,7 @@ function renderHome() {
     <div class="card">
       <div class="opt"><span class="sub">練習メニュー</span>
         <div class="chips" id="menu">${Object.entries(MENU_LABEL).map(([k, v]) => `<button class="chip ${cfg.menu === k ? 'on' : ''}" data-menu="${k}">${v}</button>`).join('')}</div></div>
-      ${isEo ? lseEoOpts(cfg) : isSolve ? `<div class="opt"><span class="sub">square</span>
+      ${isSearch ? `<div class="sub">squareを作る3つのピース(DRエッジ・FR/BRエッジ・DRF/DRBコーナー)それぞれについて、R面の色のステッカーがある場所を3Dキューブをタップして指定すると、そのケースの最短手順(QSTM / STM)と揃うアニメーションを表示します。指定していないピースがあるときは、条件に合うケースを一覧で見られます。</div>` : isEo ? lseEoOpts(cfg) : isSolve ? `<div class="opt"><span class="sub">square</span>
         <div class="chips" id="sbside">${Object.entries(isLearn ? SQ_LABEL : { ...SQ_LABEL, both: '短い方' }).map(([k, v]) => `<button class="chip ${cfg.sbSide === k ? 'on' : ''}" data-side="${k}">${v}</button>`).join('')}</div></div>
       <div class="opt"><span class="sub">出題条件</span>
         <div class="chips" id="sbby">${[['len', '最短手数'], ...(cfg.sbSide === 'both' ? [] : [['dr', 'ピースの位置と向き']])].map(([k, v]) => `<button class="chip ${cfg.sbBy === k ? 'on' : ''}" data-by="${k}">${v}</button>`).join('')}</div></div>
@@ -280,7 +281,7 @@ function renderHome() {
       <button class="btn" id="pickcases" style="margin:10px 0 0;padding:11px;font-size:15px">ケースを個別に選ぶ<small>選択中 ${nSel} / 42 ケース</small></button>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>`}
     </div>
-    ${isLearn ? `<button class="btn primary" id="go-learn">ケース一覧を見る<small>SB 学習 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`} ・ ${learnList(cfg).length}ケース</small></button>` : `    <button class="btn primary" id="go-practice">練習スタート<small>${isEo ? `${kit.name} ・ ${lseEoLabel(cfg)}` : isSolve ? `SB 手順入力 ・ ${cfg.sbSide === 'both' ? 'Front/Backの短い方' : SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`}` : isSb ? `SB 手数当て ・ ${sqQ ? 'QSTM ' : ''}${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
+    ${isSearch ? '<button class="btn primary" id="go-search">🔍 検索をはじめる<small>SB 検索 ・ キューブをタップしてケースを指定</small></button>' : isLearn ? `<button class="btn primary" id="go-learn">ケース一覧を見る<small>SB 学習 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`} ・ ${learnList(cfg).length}ケース</small></button>` : `    <button class="btn primary" id="go-practice">練習スタート<small>${isEo ? `${kit.name} ・ ${lseEoLabel(cfg)}` : isSolve ? `SB 手順入力 ・ ${cfg.sbSide === 'both' ? 'Front/Backの短い方' : SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`}` : isSb ? `SB 手数当て ・ ${sqQ ? 'QSTM ' : ''}${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
     <div class="row" style="gap:10px">
       <button class="btn blue" id="go-test" style="flex:1">⏱ テスト<small>${cfg.testN}問タイムアタック</small></button>
       <button class="btn" id="go-review" style="flex:1" ${reviewN ? '' : 'disabled'}>🔁 復習<small>間違えた問題 ${reviewN}</small></button>
@@ -296,6 +297,10 @@ function renderHome() {
   `;
   const update = (patch) => { S.setLastPractice({ ...practiceCfg(), ...patch }); renderHome(); };
   app.querySelector('#menu').onclick = (e) => { const b = e.target.closest('[data-menu]'); if (b) update({ menu: b.dataset.menu }); };
+  if (isSearch) {
+    app.querySelector('#go-search').onclick = () => openSearch(cfg);
+    return;
+  }
   if (isLearn) {
     app.querySelector('#go-learn').onclick = () => openLearn(learnSideFix(practiceCfg()));
   } else {
@@ -1271,7 +1276,8 @@ function renderLearn() {
       <div class="lcap"></div></div>`).join('')}</div>
     ${pager('pgbot')}
     <div class="sub" style="text-align:center;margin-top:6px">キューブをタップすると詳しく見られます。</div>`;
-  app.querySelector('#lclose').onclick = () => { closeLearnState(); render(); };
+  // SB 検索から開いた一覧は、閉じると検索に戻る
+  app.querySelector('#lclose').onclick = () => { const from = learn.from; closeLearnState(); learn = from || null; render(); };
   app.querySelector('#showd').onclick = () => { setShowD(!!S.get().settings.hideD); renderLearn(); };
   app.querySelectorAll('.pager').forEach((el) => {
     el.onclick = (e) => { const b = e.target.closest('[data-pg]'); if (b) { learn.page += Number(b.dataset.pg); renderLearn(); window.scrollTo(0, 0); } };
@@ -1355,6 +1361,138 @@ function renderLearnDetail() {
   app.querySelector('#lpractice').onclick = () => {
     stopLearnPlayers();
     startQuiz('practice', { ...cfg, menu: 'sbSolve', sbSide: c.side, caseNo: c.id });
+  };
+}
+
+// ---------------- SB 検索 ----------------
+// square の 3 ピースそれぞれの R 面ステッカーの位置を 3D キューブのタップで指定し、そのケースの最短手順を出す。
+// 3 つとも指定したらケースが 1 つに決まる。指定していないピースがあれば、条件に合うケースを一覧(SB 学習の一覧)で見られる
+const SEARCH_KEYS = ['dr', 'e2', 'co'];
+function openSearch(cfg) {
+  learn = { mode: 'search', cfg, side: cfg.sbSide === 'back' ? 'back' : 'front', place: { dr: null, e2: null, co: null }, active: 'dr' };
+  render();
+}
+// ボタンに収まるよう短く書く
+const oriText = (k, ori) => ({ good: k === 'co' ? '向き○' : 'EO○', bad: 'EO×', cw: '時計回り', ccw: '反時計回り' })[ori];
+// 指定したピースだけの条件で SB 学習の一覧を開くための設定
+function searchListCfg(s, info) {
+  const on = SEARCH_KEYS.filter((k) => info[k]);
+  return {
+    ...s.cfg, menu: 'sbLearn', sbSide: s.side, sbBy: 'dr', sbPick: on.length ? on : ['dr'],
+    sbDr: info.dr ? [info.dr.pos] : [...DR_POSITIONS], sbOri: info.dr ? info.dr.ori : 'any',
+    sbE2: info.e2 ? [info.e2.pos] : [...DR_POSITIONS], sbE2Ori: info.e2 ? info.e2.ori : 'any',
+    sbCo: info.co ? [info.co.pos] : [...CORNER_POSITIONS], sbCoOri: info.co ? info.co.ori : 'any',
+  };
+}
+
+function renderSearch() {
+  stopLearnPlayers();
+  const s = learn;
+  const st = S.get().settings;
+  const rCol = COLOR_JA[schemeFor(st.up, st.front)[1]];
+  app.innerHTML = `
+    <div class="quiz-top">
+      <button class="x" id="sclose">✕</button>
+      <div style="text-align:center;flex:1;min-width:0"><div style="font-weight:800">SB 検索</div><div class="sub">R面の色(${rCol})のステッカーの位置をタップ</div></div>
+      <div style="width:40px"></div>
+    </div>
+    <div class="chips sside" id="sside">${Object.entries(SQ_LABEL).map(([k, v]) => `<button class="chip" data-side="${k}">${v}</button>`).join('')}</div>
+    <div class="spieces" id="spieces"></div>
+    <div class="dbar"><button class="chip dchip" id="sreset">リセット</button></div>
+    <div id="sscene" class="scene searchscene"></div>
+    <div class="sub shint" id="shint"></div>
+    <div id="sres"></div>`;
+  const view = newLearnView(app.querySelector('#sscene'), 0.5);
+  view.allowHideD = false; // 指定用のキューブは常に D 面の色も見せる
+  if (s.view) view.setView(...s.view);
+  view.showBack(st.showBack !== false);
+  s.editor = view;
+  view.onTapSticker = (i) => {
+    const piece = SEARCH_PIECES[s.side][s.active];
+    if (!sbPlaceSpots(piece).includes(i)) { toast(`${pieceName(s.active, s.side)}のR面はそこには来ません(点線の場所をタップ)`); return; }
+    // 同じ場所にある別のピースは外す
+    for (const k of SEARCH_KEYS) if (k !== s.active && s.place[k] != null && slotOf(s.place[k]) === slotOf(i)) s.place[k] = null;
+    s.place[s.active] = i;
+    const next = SEARCH_KEYS.find((k) => s.place[k] == null);
+    if (next) s.active = next;
+    refreshSearch();
+  };
+  app.querySelector('#sclose').onclick = () => { closeLearnState(); render(); };
+  app.querySelector('#sreset').onclick = () => { s.place = { dr: null, e2: null, co: null }; s.active = 'dr'; refreshSearch(); };
+  app.querySelector('#sside').onclick = (e) => {
+    const b = e.target.closest('[data-side]');
+    if (!b || b.dataset.side === s.side) return;
+    // DR エッジはそのまま。もう一つのエッジとコーナーは別のピースになるので外す
+    s.side = b.dataset.side;
+    s.place.e2 = s.place.co = null;
+    if (s.place.dr != null) s.active = 'e2';
+    refreshSearch();
+  };
+  app.querySelector('#spieces').onclick = (e) => { const b = e.target.closest('[data-k]'); if (b) { s.active = b.dataset.k; refreshSearch(); } };
+  refreshSearch();
+}
+
+function refreshSearch() {
+  stopLearnPlayers();
+  const s = learn;
+  const r = sbSearch(s.side, s.place);
+  const view = s.editor;
+  s.view = [view.pitch, view.yaw];
+  app.querySelectorAll('#sside [data-side]').forEach((b) => b.classList.toggle('on', b.dataset.side === s.side));
+  app.querySelector('#spieces').innerHTML = SEARCH_KEYS.map((k) => {
+    const i = r.info[k];
+    return `<button class="spiece ${s.active === k ? 'on' : ''} ${i ? 'set' : ''}" data-k="${k}"><b>${pieceName(k, s.side)}</b><span>${i ? `${i.pos} ・ ${oriText(k, i.ori)}` : '未指定'}</span></button>`;
+  }).join('');
+  view.setColors(r.colors, r.highlight);
+  view.setMarks(new Set(sbPlaceSpots(SEARCH_PIECES[s.side][s.active])));
+  app.querySelector('#shint').textContent = `${pieceName(s.active, s.side)}のR面のステッカーがある場所をタップ(点線の場所に置けます)。ドラッグで回せます。`;
+  const res = app.querySelector('#sres');
+  if (r.id == null) {
+    const lcfg = searchListCfg(s, r.info);
+    const n = learnList(lcfg).length;
+    const placed = SEARCH_KEYS.filter((k) => r.info[k]).length;
+    res.innerHTML = `<div class="card sres"><div class="sub">${placed ? `あと${3 - placed}つ指定するとケースが1つに決まります。` : '3つのピースを指定するとケースが1つに決まります。'}</div>
+      <button class="btn" id="slist" ${n ? '' : 'disabled'}>今の指定に合うケースを一覧で見る<small>${n}ケース(最短2手以上)</small></button></div>`;
+    app.querySelector('#slist').onclick = () => {
+      const from = learn;
+      learn = { cfg: lcfg, list: learnList(lcfg), page: 0, detail: null, from };
+      render();
+    };
+    return;
+  }
+  if (!r.stm) {
+    res.innerHTML = '<div class="card sres"><b>squareは揃っています(0手)。</b></div>';
+    return;
+  }
+  const p = sbCaseProblem(r.side, r.id);
+  const rec = (S.get().sbCaseStats || {})[`${r.side}#${r.id}`];
+  res.innerHTML = `
+    <div class="card sres">
+      <div class="row between"><b>${SQ_LABEL[r.side]} ・ 最短 QSTM ${r.qstm}手 / STM ${r.stm}手</b>${showDChip()}</div>
+      <div id="sanim" class="scene anim-view"></div>
+      <div class="sub lrec">${rec ? `このケースの練習: ${rec.n}回 ・ 正解 ${rec.correct}回(${pct(rec.correct, rec.n)}%)` : 'このケースはまだ練習していません'}</div>
+      <div class="feedback">${sbTable(p)}<div class="animhint">キューブをタップで停止/再生(どちらも最初の局面から)、右の余白で1手進む、左の余白で1手戻る。表の手順をタップするとその手順を再生します</div></div>
+      <button class="btn primary" id="spractice" style="margin-top:12px">このケースを練習<small>手順入力で、このケースだけをくり返し出題します</small></button>
+    </div>`;
+  const sceneEl = res.querySelector('#sanim');
+  const av = newLearnView(sceneEl, 0.48);
+  const label = document.createElement('div');
+  label.className = 'anim-label';
+  sceneEl.appendChild(label);
+  const play = (alg) => {
+    stopLearnPlayers();
+    res.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => tr.classList.toggle('playing', tr.dataset.alg === alg));
+    const pl = new Player(av, { label }).load(p.colors, p.highlight, alg);
+    learnPlayers.push(pl);
+    av.onTap = (side) => pl.tap(side);
+    pl.start();
+  };
+  res.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => { tr.onclick = () => play(tr.dataset.alg); });
+  play(res.querySelector('.soltab tr[data-alg]').dataset.alg);
+  res.querySelector('#showd').onclick = () => { setShowD(!!S.get().settings.hideD); refreshSearch(); };
+  res.querySelector('#spractice').onclick = () => {
+    stopLearnPlayers();
+    startQuiz('practice', { ...s.cfg, menu: 'sbSolve', sbSide: r.side, caseNo: r.id });
   };
 }
 

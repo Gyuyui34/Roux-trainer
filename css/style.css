@@ -304,3 +304,21 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .rank.r0 { color: #d39a6a; } .rank.r1 { color: #c9d1dc; } .rank.r2 { color: #ffcc33; } .rank.r3 { color: #7fe3e0; }
 .rank.r4 { color: #8fc7ff; } .rank.r5 { color: #d58cff; } .rank.r6 { color: #ff7b7b; }
 #modal-root .modal-bg { z-index: 56; }
+
+/* SB 検索: ステッカーをタップしてピースを置く */
+.sside { justify-content: center; margin: 4px 0 8px; }
+.spieces { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.spiece { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 4px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); min-width: 0; }
+.spiece b { font-size: 13px; }
+.spiece span { font-size: 11px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.spiece.set span { color: var(--text); }
+.spiece.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+/* 指定用のキューブは透かさない(見えているステッカーとタップする場所を一致させる)。裏面の小キューブは出す */
+.searchscene .cube3d.xray .tile { background: #0b0b0d; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.searchscene .cube3d.xray .sticker.ghost { opacity: 1; background: #3d4250; }
+.searchscene.xray-host > .backview { display: block; }
+.searchscene .sticker.cand { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.searchscene .cube3d.xray .sticker.ghost.cand { background: #5b6170; }
+.shint { text-align: center; margin: 2px 0 8px; }
+.sres { margin-top: 4px; }
+.sres .dchip { padding: 6px 12px; font-size: 13px; }

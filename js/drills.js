@@ -686,6 +686,57 @@ export function sbCaseProblem(side, id) {
   return p;
 }
 
+// ---- SB 検索: square の 3 ピースそれぞれの R 面ステッカーの位置から、ケースを特定する ----
+// ピースごとに「R 面ステッカーの位置 → そのピースの各ステッカーの位置」を U R r M で行ける範囲だけ作る
+export const SEARCH_PIECES = { front: { dr: 'DR', e2: 'FR', co: 'DRF' }, back: { dr: 'DR', e2: 'BR', co: 'DRB' } };
+const placeMaps = {};
+function placeMap(piece) {
+  if (placeMaps[piece]) return placeMaps[piece];
+  const homes = C.piecesStickers([piece]);
+  const rHome = homes.find((i) => C.FACES[C.STICKERS[i].face] === 'R');
+  const map = new Map();
+  let frontier = [new Map(homes.map((h) => [h, h]))]; // 元のステッカー → 今の位置
+  while (frontier.length) {
+    const next = [];
+    for (const at of frontier) {
+      const r = at.get(rHome);
+      if (map.has(r)) continue;
+      map.set(r, at);
+      for (const m of SB_MOVES) next.push(new Map([...at].map(([h, i]) => [h, C.MOVES[m].perm[i]])));
+    }
+    frontier = next;
+  }
+  return (placeMaps[piece] = map);
+}
+// そのピースの R 面ステッカーを置ける位置(ステッカー番号)
+export const sbPlaceSpots = (piece) => [...placeMap(piece).keys()];
+// ステッカー番号 → ピースの場所の名前(UF, DFR など)
+export const slotOf = (i) => POS_OF_STICKER.get(i) || null;
+
+// place: { dr, e2, co } それぞれ R 面ステッカーの位置(未指定は null)。
+// 表示用の色と強調、指定したピースの位置と向き、3 つとも指定していればケース番号と最短手数を返す
+export function sbSearch(side, place) {
+  const k = SQUARES[side] ? side : 'front';
+  const names = SEARCH_PIECES[k];
+  const colors = C.solved();
+  const hl = Array(54).fill('0');
+  hl[R_CENTER] = '1';
+  const info = {}, homeAt = {};
+  for (const key of ['dr', 'e2', 'co']) {
+    const at = place[key] != null ? placeMap(names[key]).get(place[key]) : null;
+    if (!at) continue;
+    for (const [h, i] of at) { colors[i] = C.STICKERS[h].face; hl[i] = '1'; }
+    homeAt[key] = at.get(C.stickerAt(names[key]));
+    info[key] = pieceInfo(homeAt[key]);
+  }
+  const res = { side: k, colors, highlight: hl.join(''), info };
+  if (homeAt.dr == null || homeAt.e2 == null || homeAt.co == null) return res;
+  const slots = new Set([homeAt.dr, homeAt.e2, homeAt.co].map((i) => C.STICKERS[i].pos.join(',')));
+  if (slots.size < 3) return res;
+  const id = EDGE_STK.indexOf(homeAt.dr) * 576 + CORNER_STK.indexOf(homeAt.co) * 24 + EDGE_STK.indexOf(homeAt.e2);
+  return { ...res, id, stm: getSq(k).tables[0].dist[id], qstm: getQtm(k).tables[0].dist[id] };
+}
+
 // opts.len: 最短手数を指定 / opts.drPos: DR エッジの位置(複数可)を指定。手数は 2 手以上でランダム
 // SB の 5 ピース(DR FR BR DRF DRB)の置き方で、実際に作れるものを全部調べる(幅優先探索。初回だけ)
 let sbReachable = null;

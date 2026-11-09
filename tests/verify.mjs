@@ -1,6 +1,6 @@
 // node tests/verify.mjs : 手順表と出題生成の検証
 import * as C from '../js/cube.js';
-import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext } from '../js/drills.js';
+import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext, sbSearch, sbPlaceSpots, SEARCH_PIECES } from '../js/drills.js';
 
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('NG:', msg); } };
@@ -224,6 +224,24 @@ for (const side of ['front', 'back']) {
   }
   const pc = sbCatalog({ side, drPos: ['UF'], drOri: 'good', e2Pos: null, e2Ori: 'any', coPos: null, coOri: 'any' });
   check(pc.length === sbPieceCount({ side, drPos: ['UF'], drOri: 'good', e2Pos: null, e2Ori: 'any', coPos: null, coOri: 'any' }) && pc.every((c) => c.dr.pos === 'UF' && c.dr.ori === 'good'), 'sbCatalog pieces');
+}
+// SB 検索: R 面ステッカーの位置 3 つで全 5184 ケースが 1 つずつ決まり、盤面の R 面の色がタップした位置にある
+for (const side of ['front', 'back']) {
+  const n = SEARCH_PIECES[side];
+  const ids = new Set();
+  let cnt = 0, ok = true;
+  for (const dr of sbPlaceSpots(n.dr)) for (const e2 of sbPlaceSpots(n.e2)) for (const co of sbPlaceSpots(n.co)) {
+    const r = sbSearch(side, { dr, e2, co });
+    if (r.id == null) continue;
+    cnt++;
+    ids.add(r.id);
+    if (r.stm === 255 || ![dr, e2, co].every((i) => r.colors[i] === 1)) ok = false;
+    if (cnt % 97 === 0 && r.stm >= 2) {
+      const p = sbCaseProblem(side, r.id);
+      if (p.optLen !== r.stm || [...r.highlight].some((h, i) => h === '1' && p.colors[i] !== r.colors[i])) ok = false;
+    }
+  }
+  check(cnt === 5184 && ids.size === 5184 && ok, `sbSearch ${side} ${cnt} ${ids.size}`);
 }
 // LSE EO: 表の手数が総当たりと一致・解答例で揃う・条件どおりに出る
 {
