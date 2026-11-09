@@ -893,7 +893,9 @@ function playAlg(alg) {
   app.querySelectorAll('.soltab tr[data-alg]').forEach((tr) => tr.classList.toggle('playing', tr.dataset.alg === alg));
   const label = app.querySelector('#animlabel');
   label.hidden = false;
-  const pl = new Player(quiz.view, { label }).load(p.colors, p.highlight, alg);
+  // ヒントを使った問題は、ヒントを使う前の盤面からヒントの手も含めて再生する
+  const o = p.hintOf && p.hints ? p.hintOf : p;
+  const pl = new Player(quiz.view, { label }).load(o.colors, o.highlight, o === p ? alg : [...p.hints, alg].join(' '));
   player = pl;
   quiz.view.onTap = (side) => pl.tap(side);
   pl.start();
