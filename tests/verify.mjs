@@ -1,6 +1,6 @@
 // node tests/verify.mjs : 手順表と出題生成の検証
 import * as C from '../js/cube.js';
-import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem } from '../js/drills.js';
+import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext } from '../js/drills.js';
 
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('NG:', msg); } };
@@ -136,6 +136,24 @@ for (const side of ['front', 'back']) {
     check(p.qOptLen === qtmLen(p.qtmSols[side][0].split(' ')), 'sbSolve qOptLen');
     check(p.highlight.split('').filter((x) => x === '1').length === 8, 'sbSolve highlights only the 3 square pieces + R center');
   }
+}
+// SB 手順入力のヒント: 毎回 QSTM の最短手順の最初の 1 手を回し、手数が減る。最後の 1 手は出さない
+for (const [side, opts] of [['front', { len: 7 }], ['back', { len: 5, metric: 'qstm' }], ['both', { len: 6, lenMax: 7 }]]) {
+  const p0 = generate('sbSolve', { side, ...opts });
+  let p = p0;
+  for (let n = 1; ; n++) {
+    const h = sbHintNext(p);
+    if (!h) { check(p.optLen <= 1, `hint stops only at last move ${side}`); break; }
+    check(h.hints.length === n && h.hintOf === p0 && h.caseKey === p0.caseKey, `hint meta ${side}`);
+    check(h.qOptLen < p.qOptLen && h.optLen <= p.optLen && h.optLen >= p.optLen - 1, `hint shortens ${side} ${p.qOptLen}->${h.qOptLen}`);
+    check(C.isSolvedAt(C.applyAlg(p.colors, C.parseAlg(h.hints[n - 1])), C.FB_STICKERS), `hint keeps FB ${side}`);
+    check(JSON.stringify(C.applyAlg(p.colors, C.parseAlg(h.hints[n - 1]))) === JSON.stringify(h.colors), `hint board ${side}`);
+    const ks = side === 'both' ? ['front', 'back'] : [side];
+    for (const k of ks) for (const alg of h.sbSols[k]) check(solvesSquare(h.colors, k, alg.split(' ').flatMap(quarter)), `hint sol ${side} ${alg}`);
+    check(!solvesSquare(h.colors, side, []), `hint not solved yet ${side}`);
+    p = h;
+  }
+  check(p !== p0, `hint used at least once ${side}`);
 }
 // SB 手順入力(DR エッジの位置で指定): DR エッジが指定した位置にあり、示した最短手順で揃う
 const piece0 = (n) => C.piecesStickers([n]);

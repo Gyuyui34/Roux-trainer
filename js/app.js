@@ -1,6 +1,6 @@
 import * as S from './store.js';
 import * as FX from './fx.js';
-import { generate, DRILLS, CMLL_CASES, identifyCmll, solvesCase, solvesSquare, mergeMoves, qtmLen, DR_POSITIONS, DR_ORIS, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem } from './drills.js';
+import { generate, DRILLS, CMLL_CASES, identifyCmll, solvesCase, solvesSquare, mergeMoves, qtmLen, DR_POSITIONS, DR_ORIS, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext } from './drills.js';
 import { CMLL_SETS } from './cmll.js';
 import { CubeView, ORIENTATIONS, COLOR_JA, COLOR_HEX, schemeFor } from './view3d.js';
 import { applyAlg, solved } from './cube.js';
@@ -676,6 +676,7 @@ function buildQuizView() {
     if (padEl && padEl.dataset.mv) return;
     if (padEl && quiz && !quiz.answered) {
       if (padEl.id === 'padok') { answerSeq(padEl); return; }
+      if (padEl.id === 'padhint') { useHint(); return; }
       const before = quiz.seq.slice();
       let undo = null;
       if (padEl.id === 'padback') undo = quiz.seq.pop();
@@ -761,7 +762,7 @@ function nextProblem() {
     app.querySelector('#choices').innerHTML = `<div class="seq" id="seq"></div>
       ${p.padMoves ? `<div class="pad pad4">${p.padMoves.map((m) => `<button class="padbtn" data-mv="${esc(m)}">${esc(m)}</button>`).join('')}</div>`
     : `<div class="pad">${PAD_MOVES.map((m) => `<button class="padbtn${m[0] === 'U' ? ' tall' : ''}" data-mv="${esc(m)}">${esc(m)}</button>`).join('')}</div>`}
-      <div class="padrow"><button class="padbtn sm" id="padback">⌫ 1手戻す</button><button class="padbtn sm" id="padclear">クリア</button><button class="padbtn sm ok" id="padok">決定</button></div>`;
+      <div class="padrow${canHint(p) ? ' four' : ''}">${canHint(p) ? '<button class="padbtn sm hint" id="padhint">💡ヒント</button>' : ''}<button class="padbtn sm" id="padback">⌫ 1手戻す</button><button class="padbtn sm" id="padclear">クリア</button><button class="padbtn sm ok" id="padok">決定</button></div>`;
     showSeq();
   } else if (p.eoAnswers) {
     app.querySelector('#choices').innerHTML = eoBoard(p);
@@ -821,14 +822,16 @@ function settle(ok, rect, wrongMsg) {
 
   if (ok) { quiz.correct++; quiz.combo++; quiz.maxCombo = Math.max(quiz.maxCombo, quiz.combo); FX.sfxCorrect(quiz.combo); } else { quiz.combo = 0; FX.sfxWrong(); }
 
-  const stored = { ...p, colors: p.colors.join('') };
+  // 間違えた問題にはヒントを使う前の盤面を残す
+  const stored = { ...(p.hintOf || p), colors: (p.hintOf || p).colors.join('') };
   const { gained, events, rating } = S.recordAnswer({
     drill: p.drill || quiz.drill, caseKey: p.caseKey, ok, mode: quiz.mode === 'test' ? 'test' : quiz.mode === 'review' ? 'review' : 'practice', combo: quiz.combo,
     problem: ok || quiz.mode === 'review' ? null : stored,
     timeMs: quiz.mode === 'review' ? 0 : performance.now() - quiz.shownT,
     sbCase: p.caseNo != null && p.square ? `${p.square}#${p.caseNo}` : null,
     // 学習の「このケースを練習」は同じケースの繰り返しなのでレートは動かさない
-    rateQ: quiz.cfg.caseNo != null ? null : rateQOf(p),
+    // ヒントを使ったときは、正解ならヒントで減った手数、不正解なら元の手数でレートを計算する
+    rateQ: quiz.cfg.caseNo != null ? null : rateQOf(ok || !p.hintOf ? p : p.hintOf),
   });
   if (rating) { quiz.rateDelta = (quiz.rateDelta || 0) + rating.delta; quiz.rateNow = rating.after; }
   quiz.xp += gained;
@@ -929,9 +932,37 @@ function showSeq() {
   const el = app.querySelector('#seq');
   if (!el) return;
   const merged = mergeMoves(quiz.seq);
-  el.innerHTML = quiz.seq.length
+  const h = quiz.current.hints;
+  el.innerHTML = (h ? `<span class="sub hintmv">💡${esc(u2p(h.join(' ')))} の後:</span> ` : '') + (quiz.seq.length
     ? `<span class="mono">${esc(u2p(merged.join(' ')) || '(打ち消し合って0手)')}</span><b>QSTM ${qtmLen(merged)}${quiz.current.lseEo ? '' : ` / STM ${merged.length}`}</b>`
-    : '<span class="sub">ボタンを押して手順を入力</span>';
+    : '<span class="sub">ボタンを押して手順を入力</span>');
+}
+
+// SB 手順入力のヒント(テスト以外)。押すと最短手順の最初の 1 手を回し、その盤面を新しい問題にする。
+// ヒントで回した手は取り消せない。入力途中の手はヒントの前に消す
+const canHint = (p) => !!(p.sbSols && p.inputPad && quiz.mode !== 'test');
+function useHint() {
+  const p = quiz.current;
+  const next = sbHintNext(p);
+  if (!next) { toast('最後の1手は自分で入力してください'); return; }
+  const m = next.hints[next.hints.length - 1];
+  quiz.current = next;
+  quiz.seq = [];
+  FX.sfxTick();
+  showSeq();
+  app.querySelector('#prompt').textContent = promptText(next);
+  // 入力途中の手は消して元の盤面に戻し、そこからヒントの手を回す
+  const view = quiz.view;
+  view.cancelMove();
+  view.setColors(p.colors, p.highlight || null);
+  view.beginMove(m);
+  view.tween(1, m.includes('2') ? 420 : 300).then((ok) => {
+    if (!ok) return;
+    view.endMove();
+    view.setColors(next.colors, next.highlight || null);
+  });
+  // 次の 1 手で揃うところまで来たら、それ以上はヒントを出さない
+  if (next.optLen <= 1) app.querySelector('#padhint').disabled = true;
 }
 
 // 判定後はボタンを隠して、解答例の表まで 1 画面に収める
@@ -949,7 +980,7 @@ function seqSummary(p) {
   }
   const solved = solvesSquare(p.colors, p.square, quiz.seq);
   const item = (name, n, opt) => `<span class="${solved && n <= opt ? 'hit' : ''}">${name} ${n}手(最短${opt}手)${solved && n <= opt ? ' ✓' : ''}</span>`;
-  return `<div class="sub seqsum">入力: <span class="mono">${esc(u2p(merged.join(' ')))}</span><br>
+  return `<div class="sub seqsum">${p.hints ? `ヒント${p.hints.length}回: <span class="mono">${esc(u2p(p.hints.join(' ')))}</span>(元の最短 QSTM ${p.hintOf.qOptLen}手 / STM ${p.hintOf.optLen}手)<br>` : ''}入力: <span class="mono">${esc(u2p(merged.join(' ')))}</span><br>
     ${item('QSTM', qtmLen(merged), p.qOptLen ?? '-')} ・ ${item('STM', merged.length, p.optLen)}</div>`;
 }
 

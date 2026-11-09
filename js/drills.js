@@ -819,6 +819,38 @@ function genSbSolve(opts = {}) {
   throw new Error('問題を生成できませんでした');
 }
 
+// SB 手順入力のヒント: QSTM の最短手順の最初の 1 手を回した盤面の問題を作る。
+// 元の問題(p.hintOf)は残し、手数・解答例・盤面はヒント後の盤面で作り直す。
+// 最短が STM 1 手のとき(次の 1 手で揃う)はヒントを出さない(null)
+export function sbHintNext(p) {
+  if (!p || !p.sbSols || p.optLen <= 1) return null;
+  const orig = p.hintOf || p;
+  const ks = p.square === 'both' ? Object.keys(SQUARES) : [p.square];
+  // QSTM で一番短い square の最短手順の最初の手
+  const k = ks.reduce((a, b) => (qtmLen(parse(p.qtmSols[b][0])) < qtmLen(parse(p.qtmSols[a][0])) ? b : a));
+  const mv = parse(p.qtmSols[k][0])[0];
+  const hints = [...(p.hints || []), mv];
+  const tracked = trackedApply(trackedSolved(), [...parse(orig.scramble), ...hints]);
+  const r = Object.fromEntries(ks.map((x) => [x, sqSolutions(tracked, x)]));
+  const q = Object.fromEntries(ks.map((x) => [x, sqSolutionsQtm(tracked, x)]));
+  const len = Math.min(...ks.map((x) => r[x].len));
+  const qLen = Math.min(...ks.map((x) => qtmLen(q[x][0])));
+  const name = p.square === 'both' ? 'Front / Back の短い方' : SQUARES[p.square].name;
+  return {
+    ...orig,
+    hintOf: orig,
+    hints,
+    colors: colorsOf(tracked),
+    highlight: p.square === 'both' ? sbHighlight(tracked) : sbHighlight(tracked, new Set(SQ_STICKERS[p.square])),
+    sbSols: Object.fromEntries(ks.map((x) => [x, wideLast(r[x].sols)])),
+    qtmSols: Object.fromEntries(ks.map((x) => [x, wideLast(q[x])])),
+    optLen: len,
+    qOptLen: qLen,
+    scramble: [...parse(orig.scramble), ...hints].join(' '),
+    prompt: `${name}を最短で作る手順を入力(QSTM ${qLen}手 / STM ${len}手)・ヒント${hints.length}回`,
+  };
+}
+
 export const ENABLED_DRILLS = ['cmll'];
 
 import { genLseEo } from './lse.js';

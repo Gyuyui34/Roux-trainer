@@ -255,6 +255,9 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .seq b { white-space: nowrap; color: var(--sub); }
 .pad { display: grid; grid-template-columns: 0.6fr 0.6fr 1fr 1fr 1fr; gap: 8px; }
 .padrow { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 8px; }
+.padrow.four { grid-template-columns: 1fr 1fr 1fr 1.2fr; }
+.padbtn.hint { color: var(--accent); }
+.hintmv { margin-right: 4px; }
 .padbtn { touch-action: manipulation; -webkit-user-select: none; user-select: none; padding: 13px 0; border-radius: 12px; background: var(--panel); border: 2px solid var(--line); font: 800 19px ui-monospace, "SF Mono", Menlo, monospace; color: var(--text); }
 .padbtn.tall { grid-row: span 2; }
 .pad.pad4 { grid-template-columns: repeat(4, 1fr); }
