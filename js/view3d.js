@@ -119,6 +119,8 @@ export class CubeView {
     if (this.back) { this.back.allowHideD = this.allowHideD; this.back.setColors(colors, highlight); }
     // 強調表示のときは、それ以外を同じ灰色の半透明にして裏側のステッカーを透かして見せる
     this.cube.classList.toggle('xray', !!highlight);
+    // 透けている(強調表示)ときは裏面の小キューブと裏面ボタンを出さない
+    this.host.classList.toggle('xray-host', !!highlight);
     colors.forEach((c, i) => {
       const ghost = !!highlight && (highlight[i] === '0' || (CubeView.hideD && this.allowHideD !== false && c === 3));
       this.stickerEls[i].style.background = ghost ? '' : COLOR_HEX[this.scheme[c]];

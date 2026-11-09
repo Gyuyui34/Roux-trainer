@@ -1271,7 +1271,7 @@ function renderLearnDetail() {
       <div style="text-align:center;flex:1"><div style="font-weight:800">${SQ_LABEL[c.side]} ・ ケース ${idx + 1} / ${list.length}</div><div class="sub">最短 QSTM ${c.qstm}手 / STM ${c.stm}手</div></div>
       <div style="width:40px"></div>
     </div>
-    <div class="dbar"><button class="chip dchip ${S.get().settings.showBack !== false ? 'on' : ''}" id="showback">裏面</button>${showDChip()}</div>
+    <div class="dbar">${p.highlight ? '' : `<button class="chip dchip ${S.get().settings.showBack !== false ? 'on' : ''}" id="showback">裏面</button>`}${showDChip()}</div>
     <div id="lscene" class="scene anim-view"></div>
     <div class="pager"><button id="lprev" ${idx ? '' : 'disabled'}>‹ 前のケース</button><button id="lnext" ${idx < list.length - 1 ? '' : 'disabled'}>次のケース ›</button></div>
     <div class="sub lrec">${rec ? `このケースの練習: ${rec.n}回 ・ 正解 ${rec.correct}回(${pct(rec.correct, rec.n)}%)` : 'このケースはまだ練習していません'}</div>
@@ -1279,7 +1279,7 @@ function renderLearnDetail() {
     <button class="btn primary" id="lpractice" style="margin-top:12px">このケースを練習<small>手順入力で、このケースだけをくり返し出題します</small></button>`;
   const sceneEl = app.querySelector('#lscene');
   const view = newLearnView(sceneEl, 0.48);
-  view.showBack(S.get().settings.showBack !== false);
+  view.showBack(!p.highlight && S.get().settings.showBack !== false);
   const label = document.createElement('div');
   label.className = 'anim-label';
   sceneEl.appendChild(label);
@@ -1296,7 +1296,8 @@ function renderLearnDetail() {
   const go = (d) => { learn.detail = idx + d; renderLearnDetail(); window.scrollTo(0, 0); };
   app.querySelector('#lback').onclick = () => { learn.page = Math.floor(idx / LEARN_PER); learn.detail = null; render(); };
   app.querySelector('#showd').onclick = () => { setShowD(!!S.get().settings.hideD); renderLearnDetail(); };
-  app.querySelector('#showback').onclick = () => { S.updateSettings({ showBack: S.get().settings.showBack === false }); renderLearnDetail(); };
+  const sbBtn = app.querySelector('#showback');
+  if (sbBtn) sbBtn.onclick = () => { S.updateSettings({ showBack: S.get().settings.showBack === false }); renderLearnDetail(); };
   app.querySelector('#lprev').onclick = () => go(-1);
   app.querySelector('#lnext').onclick = () => go(1);
   app.querySelector('#lpractice').onclick = () => {
