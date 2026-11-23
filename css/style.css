@@ -235,7 +235,7 @@ textarea.algin { width: 100%; margin-top: 12px; background: var(--panel2); color
 .scene.noback > .backview, .scene.noback > .view-tools [data-v=back] { display: none; }
 .eopair { display: flex; gap: 6px; width: 100%; }
 .eopair[hidden], .scene[hidden] { display: none; }
-.eohalf { flex: 1; min-width: 0; aspect-ratio: 1 / 1; max-height: 31vh; position: relative; border: 1px solid var(--line); border-radius: 12px; }
+.eohalf { flex: 1; min-width: 0; height: 100%; max-height: none; position: relative; border: 1px solid var(--line); border-radius: 12px; }
 .eohalf.scene { width: auto; }
 .after-label.before { background: #6b7385; }
 /* CMLL後のEO: 手元を見なくても押せるように大きく・目立つ色に */
@@ -259,7 +259,9 @@ textarea.algin { width: 100%; margin-top: 12px; background: var(--panel2); color
 .aufrow.eo .aufbtn.picked { background: #ffcc33; border-color: #fff1b8; color: #1a1a1a; }
 .aufrow.eo .aufbtn.correct { background: #1f9e55; border-color: #7ff0ad; box-shadow: none; }
 .aufrow.eo .aufbtn.wrong { background: #a3192b; border-color: #ff9aa6; box-shadow: none; }
-#eosubmit { padding: 16px 26px; font-size: 18px; }
+#eosubmit { padding: 16px 0; font-size: 18px; width: 8.5em; }
+#eosubmit.next-hot { background: linear-gradient(135deg, #ff2d95, #ff7a00); border-color: #ffe14d; color: #fff; box-shadow: 0 0 0 3px rgba(255,225,77,.55), 0 4px 0 #a3125c; animation: nexthot 1s ease-in-out infinite alternate; }
+@keyframes nexthot { from { filter: brightness(1); } to { filter: brightness(1.25); } }
 body.quiz-mode .prompt { margin: 2px 0 8px; }
 
 .opt { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }

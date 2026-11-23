@@ -883,12 +883,19 @@ function settle(ok, rect, wrongMsg) {
     ${rating ? `<div class="rdelta ${rating.delta >= 0 ? 'up' : 'down'}">レート ${rating.before} → <b>${rating.after}</b>(${signed(rating.delta)})<span class="sub"> 難易度 ${S.diffRating(rating.q)}</span></div>` : ''}
     ${p.inputPad && quiz.seq.length ? seqSummary(p) : ''}
     ${anim ? '' : `<div class="sub mono">${esc(p.explain)}</div>`}</div>
-    ${autoNext ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
+    ${autoNext || p.eoAnswers ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
     ${p.lseEo ? lseEoTable(p) : p.sbSols ? sbTable(p) : ''}
     ${anim ? '<div class="animhint">キューブをタップで停止/再生(どちらも最初の局面から)、右の余白で1手進む、左の余白で1手戻る</div>' : ''}
     <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(anim ? u2p(p.scramble) : p.scramble)}</div></details>`;
   if (autoNext) {
     setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, p.eoAnswers ? 1600 : 800);
+  } else if (p.eoAnswers) {
+    // CMLL後のEO: 「回答する」ボタンをそのまま目立つ「次へ」ボタンに変える(同じ位置・同じ大きさ)
+    const sub = app.querySelector('#eosubmit');
+    sub.disabled = false;
+    sub.textContent = '次へ ▶';
+    sub.classList.add('next-hot');
+    sub.onclick = nextProblem;
   } else {
     fb.querySelector('#next').onclick = nextProblem;
   }
@@ -1125,8 +1132,12 @@ function answerEo() {
   // 回す前(左)と回した後(右)を並べて 3D で見せて確かめられるようにする
   quiz.eoBefore.setColors(p.colors);
   quiz.eoAfter.setColors(shown.after.split('').map(Number));
-  app.querySelector('#scene').hidden = true;
-  app.querySelector('#eopair').hidden = false;
+  // ボタンの位置が動かないよう、2 つ並びの高さは出題中のキューブの高さに合わせる
+  const sceneEl = app.querySelector('#scene');
+  const pair = app.querySelector('#eopair');
+  pair.style.height = `${sceneEl.offsetHeight}px`;
+  sceneEl.hidden = true;
+  pair.hidden = false;
   quiz.eoBefore.setView(-40, -25);
   const label = app.querySelector('#eoafterlabel');
   if (label) label.textContent = withAuf ? `${shown.auf || 'AUFなし'} → 回した後` : '回した後';
