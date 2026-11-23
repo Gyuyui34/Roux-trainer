@@ -873,7 +873,8 @@ function settle(ok, rect, wrongMsg) {
   const fb = app.querySelector('#feedback');
   // SB は答えを覚えるのが目的なので、正解しても次へを押すまで答えを出しておく
   const anim = !!(p.sbSols || p.lseEo); // 答えの手順をアニメーションで見せる問題
-  const autoNext = ok && S.get().settings.autoNext && !anim;
+  // CMLL後のEO は回す前/回した後を見比べるので、正解でも次へを押すまで進まない(ユーザー指定)
+  const autoNext = ok && S.get().settings.autoNext && !anim && !p.eoAnswers;
   // 解答例の表まで 1 画面に収まるよう、キューブを小さくする
   fb.classList.toggle('sb', anim);
   // 手順入力ではボタンを隠すので、アニメーションが見えるよう少しだけ小さくする
