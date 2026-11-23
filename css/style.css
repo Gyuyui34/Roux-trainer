@@ -232,6 +232,33 @@ textarea.algin { width: 100%; margin-top: 12px; background: var(--panel2); color
 .after-label { position: absolute; left: 0; top: 4px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 8px; background: var(--blue); color: #fff; }
 #eosubmit { width: auto; margin: 0; padding: 12px 22px; flex-shrink: 0; }
 .scene.compact { max-height: 31vh; }
+.scene.noback > .backview, .scene.noback > .view-tools [data-v=back] { display: none; }
+.eopair { display: flex; gap: 6px; width: 100%; }
+.eopair[hidden], .scene[hidden] { display: none; }
+.eohalf { flex: 1; min-width: 0; aspect-ratio: 1 / 1; max-height: 31vh; position: relative; border: 1px solid var(--line); border-radius: 12px; }
+.eohalf.scene { width: auto; }
+.after-label.before { background: #6b7385; }
+/* CMLL後のEO: 手元を見なくても押せるように大きく・目立つ色に */
+.eoboard { --eo: min(66px, 17vw, 8.2vh); gap: 18px; padding: 10px 8px; }
+.eogrid { grid-template-columns: repeat(3, var(--eo)); grid-template-rows: repeat(3, var(--eo)); gap: 6px; }
+.eodcol { grid-template-columns: var(--eo); grid-template-rows: repeat(3, var(--eo)); gap: 6px; }
+.eotitle { font-size: 12px; }
+.eocell { border-radius: 12px; background: #2f5fbf; border: 3px solid #6f9dff; color: #fff; box-shadow: 0 3px 0 #1d3f86; }
+.eocell:active { transform: translateY(2px); box-shadow: 0 1px 0 #1d3f86; }
+.eocell b { font-size: 22px; }
+.eocell span { font-size: 10px; color: #cfe0ff; }
+.eocell.sel { background: #e5243b; border-color: #ff9aa6; box-shadow: 0 3px 0 #8f1222; }
+.eocell.sel b::before, .eocell.hit b::before { color: #fff; }
+.eocell.hit { background: #1f9e55; border-color: #7ff0ad; box-shadow: none; }
+.eocell.miss { background: #8a6d10; border-color: var(--accent); box-shadow: none; }
+.eocell.extra { background: #a3192b; border-color: #ff9aa6; box-shadow: none; }
+.eocell.miss span::after, .eocell.extra span::after { color: #fff; }
+.aufrow.eo { gap: 8px; }
+.aufrow.eo .aufbtn { padding: 16px 0; font-size: 20px; font-weight: 800; background: #6a3fb5; border-color: #b18bff; color: #fff; box-shadow: 0 3px 0 #3f2373; }
+.aufrow.eo .aufbtn.picked { background: #ffcc33; border-color: #fff1b8; color: #1a1a1a; }
+.aufrow.eo .aufbtn.correct { background: #1f9e55; border-color: #7ff0ad; box-shadow: none; }
+.aufrow.eo .aufbtn.wrong { background: #a3192b; border-color: #ff9aa6; box-shadow: none; }
+#eosubmit { padding: 16px 26px; font-size: 18px; }
 body.quiz-mode .prompt { margin: 2px 0 8px; }
 
 .opt { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }

@@ -661,6 +661,19 @@ function buildQuizView() {
   animLabel.className = 'anim-label';
   animLabel.hidden = true;
   sceneEl.appendChild(animLabel);
+  // CMLL後のEO: 判定後に「回す前」(左)と「回した後」(右)を並べて見せる。視点は 2 つで連動
+  const pair = document.createElement('div');
+  pair.id = 'eopair';
+  pair.className = 'eopair';
+  pair.hidden = true;
+  pair.innerHTML = '<div class="eohalf"><div class="after-label before">回す前</div></div><div class="eohalf"><div class="after-label" id="eoafterlabel">回した後</div></div>';
+  sceneEl.after(pair);
+  const halves = pair.querySelectorAll('.eohalf');
+  quiz.eoBefore = new CubeView(halves[0], { scale: 0.54 });
+  quiz.eoAfter = new CubeView(halves[1], { scale: 0.54 });
+  quiz.eoBefore.setScheme(s.up, s.front);
+  quiz.eoAfter.setScheme(s.up, s.front);
+  linkViews(quiz.eoBefore, quiz.eoAfter);
   app.querySelector('#quit').onclick = () => {
     if (quiz.mode === 'test') askConfirm('テストを中断しますか?', 'このテストは記録されません。', '中断する', endQuiz);
     else endQuiz();
@@ -755,11 +768,14 @@ function nextProblem() {
   quiz.view.setColors(p.colors, p.highlight || null);
   quiz.view.setView(...DRILLS.cmll.view, quiz.idx > 0);
   aufRow.classList.toggle('two', rowOpts.length === 2);
+  aufRow.classList.toggle('eo', !!p.eoAnswers);
   app.querySelector('#choices').classList.toggle('nums', !!p.highlight && !p.inputPad);
   app.querySelector('#prompt').textContent = promptText(p);
   quiz.selEdges = [];
   const afterLabel = app.querySelector('#afterlabel');
   if (afterLabel) afterLabel.hidden = true;
+  // CMLL後のEO では裏面の小キューブとボタンを出さない
+  sceneEl0(p);
   app.querySelector('#scene').classList.toggle('compact', !!p.eoAnswers);
   app.querySelector('#scene').classList.remove('solved-view', 'anim-view');
   quiz.seq = [];
@@ -1047,6 +1063,32 @@ function reveal() {
   settle(false, app.querySelector('#reveal').getBoundingClientRect(), '答え');
 }
 
+// 2 つのキューブの視点を連動させる(どちらをドラッグしても両方回る)
+function linkViews(a, b) {
+  for (const [x, y] of [[a, b], [b, a]]) {
+    const orig = x.apply.bind(x);
+    x.apply = () => {
+      orig();
+      if (y.pitch === x.pitch && y.yaw === x.yaw) return;
+      y.cube.style.transition = x.cube.style.transition;
+      y.pitch = x.pitch;
+      y.yaw = x.yaw;
+      y.apply();
+    };
+  }
+}
+
+// 出題ごとにシーンを戻す。CMLL後のEO は裏面表示なし、判定後の 2 つ並びも隠す
+function sceneEl0(p) {
+  const sceneEl = app.querySelector('#scene');
+  const eo = !!p.eoAnswers;
+  sceneEl.hidden = false;
+  sceneEl.classList.toggle('noback', eo);
+  quiz.view.showBack(!eo && S.get().settings.showBack !== false);
+  const pair = app.querySelector('#eopair');
+  if (pair) pair.hidden = true;
+}
+
 // CMLL→EO: 選んだエッジの集合が過不足なく一致したら正解
 function answerEo() {
   if (!quiz || quiz.answered) return;
@@ -1078,11 +1120,14 @@ function answerEo() {
     else if (bad.has(pos)) c.classList.add('miss');
     else if (sel.has(pos)) c.classList.add('extra');
   });
-  // 回した後の状態を 3D で見せて確かめられるようにする
-  quiz.view.setColors(shown.after.split('').map(Number));
-  quiz.view.setView(-55, -20, true);
-  const label = app.querySelector('#afterlabel');
-  if (label) { label.hidden = false; label.textContent = withAuf ? `${shown.auf || 'AUFなし'} → CMLLを回した後` : 'CMLLを回した後'; }
+  // 回す前(左)と回した後(右)を並べて 3D で見せて確かめられるようにする
+  quiz.eoBefore.setColors(p.colors);
+  quiz.eoAfter.setColors(shown.after.split('').map(Number));
+  app.querySelector('#scene').hidden = true;
+  app.querySelector('#eopair').hidden = false;
+  quiz.eoBefore.setView(-40, -25);
+  const label = app.querySelector('#eoafterlabel');
+  if (label) label.textContent = withAuf ? `${shown.auf || 'AUFなし'} → 回した後` : '回した後';
   const submit = app.querySelector('#eosubmit');
   submit.disabled = true;
   const missed = [...bad].filter((x) => !sel.has(x)).length;
