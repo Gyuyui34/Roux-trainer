@@ -254,6 +254,7 @@ textarea.algin { width: 100%; margin-top: 12px; background: var(--panel2); color
 .eocell.extra { background: #a3192b; border-color: #ff9aa6; box-shadow: none; }
 .eocell.miss span::after, .eocell.extra span::after { color: #fff; }
 .aufrow.eo { gap: 8px; }
+.eocell, .aufbtn { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
 .aufrow.eo .aufbtn { padding: 16px 0; font-size: 20px; font-weight: 800; background: #6a3fb5; border-color: #b18bff; color: #fff; box-shadow: 0 3px 0 #3f2373; }
 .aufrow.eo .aufbtn.picked { background: #ffcc33; border-color: #fff1b8; color: #1a1a1a; }
 .aufrow.eo .aufbtn.correct { background: #1f9e55; border-color: #7ff0ad; box-shadow: none; }

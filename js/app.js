@@ -681,6 +681,15 @@ function buildQuizView() {
   // AUF ランダムでは AUF と手順の両方を選んだ時点で判定する(順番は自由)
   // 手のボタンは押した瞬間(pointerdown)に入力する。2本の指で同時に押しても両方入る
   app.querySelector('#choices').addEventListener('pointerdown', (e) => {
+    // CMLL後のEO のエッジも押した瞬間に切り替える(同時押し可)
+    const cellEl = e.target.closest('.eocell');
+    if (cellEl && quiz && !quiz.answered) {
+      const pos = cellEl.dataset.pos;
+      quiz.selEdges = quiz.selEdges.includes(pos) ? quiz.selEdges.filter((x) => x !== pos) : [...quiz.selEdges, pos];
+      cellEl.classList.toggle('sel');
+      FX.sfxTick();
+      return;
+    }
     const padEl = e.target.closest('.padbtn[data-mv]');
     if (!padEl || !quiz || quiz.answered) return;
     const before = quiz.seq.slice();
@@ -705,14 +714,6 @@ function buildQuizView() {
       seqCube(before, undo ? invMove(undo) : null);
       return;
     }
-    const cellEl = e.target.closest('.eocell');
-    if (cellEl && quiz && !quiz.answered) {
-      const pos = cellEl.dataset.pos;
-      quiz.selEdges = quiz.selEdges.includes(pos) ? quiz.selEdges.filter((x) => x !== pos) : [...quiz.selEdges, pos];
-      cellEl.classList.toggle('sel');
-      FX.sfxTick();
-      return;
-    }
     const b = e.target.closest('.choice');
     if (!b || !quiz || quiz.answered) return;
     if (!quiz.current.aufAnswers) { answer(Number(b.dataset.i), b, null); return; }
@@ -720,13 +721,13 @@ function buildQuizView() {
     app.querySelectorAll('.choice').forEach((x) => x.classList.toggle('picked', x === b));
     if (quiz.selAuf !== null) answer(quiz.selAlg, b, quiz.selAuf);
   };
-  app.querySelector('#aufrow').onclick = (e) => {
+  app.querySelector('#aufrow').addEventListener('pointerdown', (e) => {
     const b = e.target.closest('.aufbtn');
     if (!b || !quiz || quiz.answered) return;
     quiz.selAuf = b.dataset.auf;
     app.querySelectorAll('.aufbtn').forEach((x) => x.classList.toggle('picked', x === b));
     if (quiz.selAlg !== null) answer(quiz.selAlg, app.querySelector(`.choice[data-i="${quiz.selAlg}"]`), quiz.selAuf);
-  };
+  });
 }
 
 function countdown(done) {
