@@ -122,6 +122,7 @@ function switchTab(t) {
 function render() {
   document.body.classList.toggle('quiz-mode', !!quiz);
   document.body.classList.toggle('learn-mode', !quiz && !!learn);
+  document.body.classList.toggle('home-mode', !quiz && !learn && tab === 'home');
   if (quiz) return;
   if (pendingReload && !learn) { location.reload(); return; }
   window.scrollTo(0, 0);
@@ -241,7 +242,7 @@ function renderHome() {
   const rt = rateDrill ? S.ratingOf(rateDrill) : null;
   const rToday = rateDrill ? S.ratingToday(rateDrill) : 0;
   const nextRank = rateDrill ? S.RANKS[S.rankIndex(rt.r) + 1] : null;
-  app.innerHTML = `
+  app.innerHTML = `<div class="hgrid"><div class="hstat">
     <div class="row between" style="margin-bottom:12px">
       <div class="row"><div class="lvl"><span>Lv</span><b>${lv.level}</b></div>
         <div style="width:160px"><div class="sub">次のレベルまで ${lv.need - lv.into} XP</div><div class="bar"><i style="width:${pct(lv.into, lv.need)}%"></i></div></div></div>
@@ -260,12 +261,12 @@ function renderHome() {
         <div style="flex:1"><div class="row between sub"><span>今日のノルマ</span><span><b style="color:var(--text)">${Math.min(todayN, goal)}</b> / ${goal} 問</span></div>
         <div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, pct(todayN, goal))}%"></i></div></div>
       </div>
-    </div>
+    </div></div><div class="hplay">
     <h2>練習の設定</h2>
     <div class="card">
       <div class="opt"><span class="sub">練習メニュー</span>
         <div class="chips" id="menu">${Object.entries(MENU_LABEL).map(([k, v]) => `<button class="chip ${cfg.menu === k ? 'on' : ''}" data-menu="${k}">${v}</button>`).join('')}</div></div>
-      ${isSearch ? `<div class="sub">squareを作る3つのピース(DRエッジ・FR/BRエッジ・DRF/DRBコーナー)それぞれについて、R面の色のステッカーがある場所を3Dキューブをタップして指定すると、そのケースの最短手順(QSTM / STM)と揃うアニメーションを表示します。指定していないピースがあるときは、条件に合うケースを一覧で見られます。</div>` : isEo ? lseEoOpts(cfg) : isSolve ? `<div class="opt"><span class="sub">square</span>
+      ${isSearch ? `<div class="sub desc">squareを作る3つのピース(DRエッジ・FR/BRエッジ・DRF/DRBコーナー)それぞれについて、R面の色のステッカーがある場所を3Dキューブをタップして指定すると、そのケースの最短手順(QSTM / STM)と揃うアニメーションを表示します。指定していないピースがあるときは、条件に合うケースを一覧で見られます。</div>` : isEo ? lseEoOpts(cfg) : isSolve ? `<div class="opt"><span class="sub">square</span>
         <div class="chips" id="sbside">${Object.entries(isLearn ? SQ_LABEL : { ...SQ_LABEL, both: '短い方' }).map(([k, v]) => `<button class="chip ${cfg.sbSide === k ? 'on' : ''}" data-side="${k}">${v}</button>`).join('')}</div></div>
       <div class="opt"><span class="sub">出題条件</span>
         <div class="chips" id="sbby">${[['len', '最短手数'], ...(cfg.sbSide === 'both' ? [] : [['dr', 'ピースの位置と向き']])].map(([k, v]) => `<button class="chip ${cfg.sbBy === k ? 'on' : ''}" data-by="${k}">${v}</button>`).join('')}</div></div>
@@ -273,11 +274,11 @@ function renderHome() {
         <div class="row" style="gap:6px"><div class="chips" id="sbmetric">${[['stm', 'STM'], ['qstm', 'QSTM']].map(([k, v]) => `<button class="chip ${cfg.sbMetric === k ? 'on' : ''}" data-metric="${k}">${v}</button>`).join('')}</div>
         <select id="sblen">${(cfg.sbMetric === 'qstm' ? SB_LENS_Q : SB_LENS).map((n) => `<option value="${n}" ${n === sbLenOf(cfg) ? 'selected' : ''}>${n}手</option>`).join('')}</select>
         <span class="sub">〜</span><select id="sblenmax">${(cfg.sbMetric === 'qstm' ? SB_LENS_Q : SB_LENS).map((n) => `<option value="${n}" ${n === sbLenMaxOf(cfg) ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>`}
-      <div class="sub">FBだけ揃った状態から、${cfg.sbBy === 'dr' ? `squareの3つのピースが選んだ位置・向きにある${isLearn ? 'ケース' : '問題'}を出します。エッジのEOは、基準の色(DRはD色、FRはF色、BRはB色)がU/D面を向いていれば合っている、とします(FR・BRの位置にあるときはF/B面)。コーナーはD色がU/D面なら合っていて、そうでなければD色がU/D面から外側に見て時計回り・反時計回りどちらの隣にあるかで分けます。${isLearn ? '' : '最短手数は問題文に表示されます。'}` : `${cfg.sbSide === 'both' ? 'Front と Back の両方の最短手数' : '選んだsquareの最短手数'}が${cfg.sbMetric === 'qstm' ? 'QSTM' : 'STM'}で${sbLenLabel(cfg)}(両端を含む)の${isLearn ? 'ケース' : '問題'}を出します。`}${isLearn ? '条件に合うケースを一覧にして、最短手順で揃うアニメーションを流します。タップするとそのケースの詳細が見られます。' : "U' U M' M r r' R R' のボタンを順に押して手順を入力し(M' R は r、M R' は r' に自動変換)、squareがSTMかQSTMのどちらかで最短手数で揃えば正解です(揃っても手数が多いと不正解)。"}</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
+      <div class="sub desc">FBだけ揃った状態から、${cfg.sbBy === 'dr' ? `squareの3つのピースが選んだ位置・向きにある${isLearn ? 'ケース' : '問題'}を出します。エッジのEOは、基準の色(DRはD色、FRはF色、BRはB色)がU/D面を向いていれば合っている、とします(FR・BRの位置にあるときはF/B面)。コーナーはD色がU/D面なら合っていて、そうでなければD色がU/D面から外側に見て時計回り・反時計回りどちらの隣にあるかで分けます。${isLearn ? '' : '最短手数は問題文に表示されます。'}` : `${cfg.sbSide === 'both' ? 'Front と Back の両方の最短手数' : '選んだsquareの最短手数'}が${cfg.sbMetric === 'qstm' ? 'QSTM' : 'STM'}で${sbLenLabel(cfg)}(両端を含む)の${isLearn ? 'ケース' : '問題'}を出します。`}${isLearn ? '条件に合うケースを一覧にして、最短手順で揃うアニメーションを流します。タップするとそのケースの詳細が見られます。' : "U' U M' M r r' R R' のボタンを順に押して手順を入力し(M' R は r、M R' は r' に自動変換)、squareがSTMかQSTMのどちらかで最短手数で揃えば正解です(揃っても手数が多いと不正解)。"}</div>` : isSb ? `<div class="opt"><span class="sub">最短手数の範囲</span>
         <div class="chips" id="sqmetric" style="margin-bottom:6px">${[['stm', 'STM'], ['qstm', 'QSTM']].map(([k, v]) => `<button class="chip ${cfg.sbSqMetric === k ? 'on' : ''}" data-metric="${k}">${v}</button>`).join('')}</div>
         <div class="row" style="gap:6px"><select id="sbmin">${sqLens.slice(0, -SB_GAP).map((n) => `<option value="${n}" ${n === sbMin ? 'selected' : ''}>${n}手</option>`).join('')}</select>
         <span class="sub">〜</span><select id="sbmax">${sqLens.slice(SB_GAP).map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
-      <div class="sub">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。${sqQ ? '手数はQSTM(R r U M の90°を1手、180°は2手)で数えます。' : '手数はSTM(R r U M を1手、180°も1手)で数えます。'}同じ手数なら両方正解です。</div>` : `
+      <div class="sub desc">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。${sqQ ? '手数はQSTM(R r U M の90°を1手、180°は2手)で数えます。' : '手数はSTM(R r U M を1手、180°も1手)で数えます。'}同じ手数なら両方正解です。</div>` : `
       <div class="opt"><span class="sub">問題の種類</span>
         <div class="chips" id="kind">${Object.entries(KIND_LABEL).map(([k, v]) => `<button class="chip ${cfg.kind === k ? 'on' : ''}" data-kind="${k}">${v}</button>`).join('')}</div></div>
       <div class="opt"><span class="sub">手順</span>
@@ -292,21 +293,23 @@ function renderHome() {
       <button class="btn" id="pickcases" style="margin:10px 0 0;padding:11px;font-size:15px">ケースを個別に選ぶ<small>選択中 ${nSel} / 42 ケース</small></button>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>`}
     </div>
-    ${isSearch ? '<button class="btn primary" id="go-search">🔍 検索をはじめる<small>SB 検索 ・ キューブをタップしてケースを指定</small></button>' : isLearn ? `<button class="btn primary" id="go-learn">ケース一覧を見る<small>SB 学習 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`} ・ ${learnList(cfg).length}ケース</small></button>` : `    <button class="btn primary" id="go-practice">練習スタート<small>${isEo ? `${kit.name} ・ ${lseEoLabel(cfg)}` : isSolve ? `SB 手順入力 ・ ${cfg.sbSide === 'both' ? 'Front/Backの短い方' : SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`}` : isSb ? `SB 手数当て ・ ${sqQ ? 'QSTM ' : ''}${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
+    <div class="hgo">${isSearch ? '<button class="btn primary" id="go-search">🔍 検索をはじめる<small>SB 検索 ・ キューブをタップしてケースを指定</small></button>' : isLearn ? `<button class="btn primary" id="go-learn">ケース一覧を見る<small>SB 学習 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`} ・ ${learnList(cfg).length}ケース</small></button>` : `    <button class="btn primary" id="go-practice">練習スタート<small>${isEo ? `${kit.name} ・ ${lseEoLabel(cfg)}` : isSolve ? `SB 手順入力 ・ ${cfg.sbSide === 'both' ? 'Front/Backの短い方' : SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`}` : isSb ? `SB 手数当て ・ ${sqQ ? 'QSTM ' : ''}${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
     <div class="row" style="gap:10px">
       <button class="btn blue" id="go-test" style="flex:1">⏱ テスト<small>${cfg.testN}問タイムアタック</small></button>
       <button class="btn" id="go-review" style="flex:1" ${reviewN ? '' : 'disabled'}>🔁 復習<small>間違えた問題 ${reviewN}</small></button>
     </div>
     <div class="row" style="justify-content:center;gap:8px" id="testn">
       <span class="sub">テスト問題数</span>${[10, 20, 42].map((n) => `<button class="chip ${cfg.testN === n ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}
-    </div>`}
+    </div>`}</div></div>
     ${rateDrill ? `<div class="card ratecard"><div class="row between">
       <div><div class="sub">${RATE_NAME[rateDrill]} のレート</div><div class="big">${rt.r}<span class="rtoday ${rToday >= 0 ? 'up' : 'down'}">今日 ${signed(rToday)}</span></div></div>
       <div style="text-align:right">${rankBadge(rt.r)}<div class="sub" style="margin-top:4px">${nextRank ? `${nextRank.name}まで あと${nextRank.min - rt.r}` : '最高段位'}</div><div class="sub">最高 ${rt.best} ・ ${rt.n}問</div></div></div>
       <button class="btn rated" id="go-rated">⚔ レート戦<small>今のレートに合う難しさ(最短 QSTM ${Math.max(1, Math.round(S.lenForRating(rt.r)))}手前後)で自動出題${cfg.menu === 'sbSolve' ? ` ・ ${cfg.sbSide === 'both' ? 'Front/Backの短い方' : SQ_LABEL[cfg.sbSide]}` : ''}</small></button>
-      <div class="sub">難しい問題(最短手数が多い問題)に正解するほど大きく上がり、簡単な問題を間違えると大きく下がります。通常の練習とテストでも動きます。</div></div>` : ''}
+      <div class="sub rnote">難しい問題(最短手数が多い問題)に正解するほど大きく上がり、簡単な問題を間違えると大きく下がります。通常の練習とテストでも動きます。</div></div>` : ''}</div>
   `;
   const update = (patch) => { S.setLastPractice({ ...practiceCfg(), ...patch }); renderHome(); };
+  // パソコン表示では長い説明を2行に縮めておき、クリックで全部見せる
+  app.querySelectorAll('.desc').forEach((el) => { el.onclick = () => el.classList.toggle('open'); });
   app.querySelector('#menu').onclick = (e) => { const b = e.target.closest('[data-menu]'); if (b) update({ menu: b.dataset.menu }); };
   if (isSearch) {
     app.querySelector('#go-search').onclick = () => openSearch(cfg);
@@ -535,7 +538,7 @@ function lseEoOpts(cfg) {
       <div class="chips" id="eopos">${EDGE_POS.map((p) => `<button class="chip eop ${pos[p] || ''}" data-pos="${p}">${p}${pos[p] ? ` ${posLabel[pos[p]]}` : ''}</button>`).join('')}<button class="chip" id="eoposreset">すべて問わない</button></div></div>
     ${lr ? lrChips('lrul', k.ul, 'UL') + lrChips('lrur', k.ur, 'UR') : ''}`}
     <div class="sub" style="${n ? '' : 'color:var(--ng)'}">${n ? `条件に合う形: ${n}通り(${lr ? 'エッジの位置と向き、' : ''}センター${lrb ? '・コーナー' : ''}の位置も含む)` : 'この条件に合う形はありません。条件をゆるめてください'}</div>
-    <div class="sub">${lrb ? "CMLLまで終わった状態(U面センターはU面かD面)から、EOを揃えて、ULとURのエッジをUF・UBに入れ(どちらにどちらが入ってもよい)、U面のコーナーと合わせて1×1×3のブロックをU面に2つ作る手順を U' U M' M のボタンで入力します。" : lr
+    <div class="sub desc">${lrb ? "CMLLまで終わった状態(U面センターはU面かD面)から、EOを揃えて、ULとURのエッジをUF・UBに入れ(どちらにどちらが入ってもよい)、U面のコーナーと合わせて1×1×3のブロックをU面に2つ作る手順を U' U M' M のボタンで入力します。" : lr
     ? "CMLLまで終わった状態(U面センターはU面かD面)から、EOを揃えて、ULとURのエッジをU色がD面を向くようにDF・DBに入れる手順(どちらにどちらが入ってもよい)を U' U M' M のボタンで入力します。"
     : "CMLLまで終わった状態(U面センターはU面かD面)から、LSEのEOを揃える手順を U' U M' M のボタンで入力します。"}QSTM(90°を1手、180°は2手)で最短なら正解です。すべてのピースに色を付けます。${lr ? `U面センターがF/B面のままでも完成にできます。U面センターがU/D面のときは、6本ともU/D色がU/D面を向いていれば揃っています。U面センターがF/B面のときは、${lrb ? 'UF・UBのUL・URエッジはU色がU面' : 'DF・DBのUL・URエッジはU色がD面'}、残り4本はU/D色がU/D面以外を向いていれば揃っています(センターを戻すMでそろって合う形)。` : "手順の最後には、U/D面のセンターがU/D面に来るようにM列も合わせます(その手も手数に入ります)。向きは、U/D色がU/D面を向いていれば合っている、とします(センターがM/M'ずれのときは、UF・UB・DF・DBのエッジはF/B面向きで合っている)。"}${cfg[k.by] === 'pos' ? '最短手数は問題文に表示されます。' : ''}</div>`;
 }

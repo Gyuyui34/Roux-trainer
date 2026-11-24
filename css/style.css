@@ -369,6 +369,31 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
   #tabbar .ti { font-size: 24px; }
   #app { padding: 24px 32px 32px; margin-left: max(84px, calc(50vw - 360px)); margin-right: auto; max-width: 720px; }
   body.quiz-mode #app { margin: 0 auto; max-width: 1240px; padding: 20px 32px; }
+  /* ホーム: 左に連続日数・レート、右に練習の設定。スクロールなしで収まるように詰める */
+  body.home-mode #app { margin-left: 84px; margin-right: 0; max-width: none; padding: 16px max(24px, calc((100vw - 84px - 1180px) / 2)) 16px; }
+  .hgrid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); grid-template-rows: auto auto 1fr; column-gap: 20px; align-items: start; }
+  .hplay { display: contents; }
+  .hstat { grid-column: 1; grid-row: 1; }
+  .hgo { grid-column: 1; grid-row: 2; }
+  .hgrid > .ratecard { grid-column: 1; grid-row: 3; }
+  .hplay > .card { grid-column: 2; grid-row: 1 / span 3; }
+  .hplay > h2 { display: none; }
+  .hgrid .desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; }
+  .hgrid .desc.open { display: block; }
+  .hgrid .desc:not(.open):hover { color: var(--text); }
+  .hgrid .card { padding: 12px 14px; margin-bottom: 10px; }
+  .hgrid .opt { margin-bottom: 8px; gap: 4px; }
+  .hgrid .chip { padding: 6px 12px; font-size: 13px; }
+  .hgrid .btn { padding: 11px; font-size: 16px; margin-bottom: 8px; }
+  .hgrid .btn.rated { margin: 8px 0 6px; }
+  .hgrid .btn small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hgrid .stamps { margin-top: 8px; }
+  .hgrid .stamp { aspect-ratio: auto; height: 44px; }
+  .hgo .row .btn { margin-bottom: 6px; }
+  .hgrid .flame { font-size: 36px; }
+  .hgrid .sub { font-size: 12px; }
+  .hgrid label.set { padding: 6px 0 0; }
+  @media (max-height: 720px) { .hgrid .rnote { display: none; } .hgrid .streak .sub { display: none; } }
   body.learn-mode #app { margin-left: 84px; margin-right: 0; max-width: none; padding-inline: max(32px, calc((100vw - 84px - 1180px) / 2)); }
   /* 出題・学習詳細・検索: 左にキューブ、右に問題・入力・解答表 */
   .wide2 { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(380px, 1fr); gap: 28px; align-items: start; margin-top: 8px; }
