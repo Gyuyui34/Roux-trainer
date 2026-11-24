@@ -38,6 +38,16 @@ const MENU_LABEL = { cmll: 'CMLL', sb: 'SB 手数当て', sbSolve: 'SB 手順入
 const SQ_LABEL = { front: 'Front square', back: 'Back square' };
 // 並び: U' | U | r / r' | R / R' (U' と U は縦 2 段分)
 const PAD_MOVES = ["U'", 'U', "M'", 'r', 'R', 'M', "r'", "R'"];
+// パソコンのキーボード操作(広い画面のときだけボタンにキーを表示する)
+// 手順入力: 小文字キー = 時計回り、Shift + キー = 逆回り。r(ワイド)は W キー
+const MOVE_KEYS = { U: 'u', M: 'm', R: 'r', r: 'w' };
+const AUF_KEYS = ['z', 'x', 'c', 'v'];
+const AUF_KEYS_EO = ['1', '2', '3', '4'];
+const EO_KEYS = { UB: 'W', UL: 'A', UR: 'D', UF: 'S', DB: 'I', DF: 'K' };
+function kbdOf(m) {
+  const k = MOVE_KEYS[m[0]];
+  return k ? `<kbd class="kbd">${m.endsWith("'") ? '⇧' : ''}${k.toUpperCase()}</kbd>` : '';
+}
 const KIND_LABEL = { alg: '手順を当てる', eo: 'CMLL後のEO' };
 const AUF_LABEL = { none: 'AUFなし', random: 'AUFランダム' };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -111,6 +121,7 @@ function switchTab(t) {
 
 function render() {
   document.body.classList.toggle('quiz-mode', !!quiz);
+  document.body.classList.toggle('learn-mode', !quiz && !!learn);
   if (quiz) return;
   if (pendingReload && !learn) { location.reload(); return; }
   window.scrollTo(0, 0);
@@ -607,11 +618,15 @@ function buildQuizView() {
       ${quiz.mode === 'test' ? '<div class="timer" id="timer">0.00</div>' : '<div class="combo" id="combo"></div>'}
     </div>
     ${quiz.total ? '<div class="progress"><i id="qprog" style="width:0"></i></div>' : ''}
-    <div id="scene" class="scene"></div>
+    <div class="wide2">
+    <div class="wmain"><div id="scene" class="scene"></div></div>
+    <div class="wside">
     <div class="prompt" id="prompt"></div>
     <div class="aufrow" id="aufrow" hidden>${['', 'U', 'U2', "U'"].map((a) => `<button class="aufbtn" data-auf="${a}">${a || 'なし'}</button>`).join('')}</div>
     <div class="choices" id="choices"></div>
     <div class="feedback" id="feedback"></div>
+    </div>
+    </div>
   `;
   const sceneEl = app.querySelector('#scene');
   quiz.view = new CubeView(sceneEl);
@@ -764,7 +779,8 @@ function nextProblem() {
   const aufRow = app.querySelector('#aufrow');
   aufRow.hidden = !p.aufAnswers;
   const rowOpts = p.rowOpts || ['', 'U', 'U2', "U'"].map((a) => [a, a || 'なし']);
-  aufRow.innerHTML = rowOpts.map(([v, label]) => `<button class="aufbtn" data-auf="${esc(v)}">${esc(label)}</button>`).join('');
+  const aufKeys = p.eoAnswers ? AUF_KEYS_EO : AUF_KEYS;
+  aufRow.innerHTML = rowOpts.map(([v, label], i) => `<button class="aufbtn" data-auf="${esc(v)}">${esc(label)}${aufKeys[i] ? `<kbd class="kbd">${aufKeys[i].toUpperCase()}</kbd>` : ''}</button>`).join('');
   quiz.view.allowHideD = !p.lseEo; // D面色を隠す設定は SB だけ
   quiz.view.setColors(p.colors, p.highlight || null);
   quiz.view.setView(...DRILLS.cmll.view, quiz.idx > 0);
@@ -782,18 +798,18 @@ function nextProblem() {
   quiz.seq = [];
   if (p.inputPad) {
     app.querySelector('#choices').innerHTML = `<div class="seq" id="seq"></div>
-      ${p.padMoves ? `<div class="pad pad4">${p.padMoves.map((m) => `<button class="padbtn" data-mv="${esc(m)}">${esc(m)}</button>`).join('')}</div>`
-    : `<div class="pad">${PAD_MOVES.map((m) => `<button class="padbtn${m[0] === 'U' ? ' tall' : ''}" data-mv="${esc(m)}">${esc(m)}</button>`).join('')}</div>`}
-      <div class="padrow${canHint(p) ? ' four' : ''}">${canHint(p) ? '<button class="padbtn sm hint" id="padhint">💡ヒント</button>' : ''}<button class="padbtn sm" id="padback">⌫ 1手戻す</button><button class="padbtn sm" id="padclear">クリア</button><button class="padbtn sm ok" id="padok">決定</button></div>`;
+      ${p.padMoves ? `<div class="pad pad4">${p.padMoves.map((m) => `<button class="padbtn" data-mv="${esc(m)}">${esc(m)}${kbdOf(m)}</button>`).join('')}</div>`
+    : `<div class="pad">${PAD_MOVES.map((m) => `<button class="padbtn${m[0] === 'U' ? ' tall' : ''}" data-mv="${esc(m)}">${esc(m)}${kbdOf(m)}</button>`).join('')}</div>`}
+      <div class="padrow${canHint(p) ? ' four' : ''}">${canHint(p) ? '<button class="padbtn sm hint" id="padhint">💡ヒント<kbd class="kbd">H</kbd></button>' : ''}<button class="padbtn sm" id="padback">⌫ 1手戻す<kbd class="kbd">BS</kbd></button><button class="padbtn sm" id="padclear">クリア<kbd class="kbd">Del</kbd></button><button class="padbtn sm ok" id="padok">決定<kbd class="kbd">Enter</kbd></button></div>`;
     showSeq();
   } else if (p.eoAnswers) {
     app.querySelector('#choices').innerHTML = eoBoard(p);
     app.querySelector('#eosubmit').onclick = answerEo;
   } else {
     app.querySelector('#choices').innerHTML = p.choices.map((c, i) =>
-      `<button class="choice" data-i="${i}"><span>${esc(c.label)}</span><small>${esc(c.sub || '')}</small></button>`).join('');
+      `<button class="choice" data-i="${i}"><span>${esc(c.label)}${i < 9 ? `<kbd class="kbd">${i + 1}</kbd>` : ''}</span><small>${esc(c.sub || '')}</small></button>`).join('');
   }
-  app.querySelector('#feedback').innerHTML = p.sbSols || p.lseEo ? '<button class="btn" id="reveal">答えを見る<small>不正解として記録されます</small></button>' : '';
+  app.querySelector('#feedback').innerHTML = p.sbSols || p.lseEo ? '<button class="btn" id="reveal">答えを見る<kbd class="kbd">/</kbd><small>不正解として記録されます</small></button>' : '';
   if (p.sbSols || p.lseEo) app.querySelector('#reveal').onclick = reveal;
   const qc = app.querySelector('#qcount');
   qc.textContent = quiz.total ? `${quiz.idx + 1} / ${quiz.total}` : `${quiz.idx + 1}問目 ・ 正解 ${quiz.correct}${quiz.cfg.rated ? ` ・ レート ${S.ratingOf(quiz.drill).r}` : ''}`;
@@ -883,7 +899,7 @@ function settle(ok, rect, wrongMsg) {
     ${rating ? `<div class="rdelta ${rating.delta >= 0 ? 'up' : 'down'}">レート ${rating.before} → <b>${rating.after}</b>(${signed(rating.delta)})<span class="sub"> 難易度 ${S.diffRating(rating.q)}</span></div>` : ''}
     ${p.inputPad && quiz.seq.length ? seqSummary(p) : ''}
     ${anim ? '' : `<div class="sub mono">${esc(p.explain)}</div>`}</div>
-    ${autoNext || p.eoAnswers ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ</button>'}</div>
+    ${autoNext || p.eoAnswers ? '' : '<button class="btn primary" id="next" style="width:auto;padding:12px 22px;margin:0">次へ<kbd class="kbd">Enter</kbd></button>'}</div>
     ${p.lseEo ? lseEoTable(p) : p.sbSols ? sbTable(p) : ''}
     ${anim ? '<div class="animhint">キューブをタップで停止/再生(どちらも最初の局面から)、右の余白で1手進む、左の余白で1手戻る</div>' : ''}
     <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(anim ? u2p(p.scramble) : p.scramble)}</div></details>`;
@@ -1194,7 +1210,7 @@ function openCasePicker() {
 
 // U 面(上から見た図)の右に、D 面のエッジを後ろ→前の順で縦に並べる(行の高さを揃えて前後を対応させる)
 function eoBoard(p) {
-  const cell = (pos, label) => `<button class="eocell" data-pos="${pos}"><b>${label}</b><span>${pos}</span></button>`;
+  const cell = (pos, label) => `<button class="eocell" data-pos="${pos}"><b>${label}</b><span>${pos}</span><kbd class="kbd">${EO_KEYS[pos]}</kbd></button>`;
   return `<div class="eoboard">
       <div class="eopanel"><div class="eotitle">U面のエッジ</div>
         <div class="eogrid">
@@ -1388,11 +1404,14 @@ function renderLearnDetail() {
       <div style="width:40px"></div>
     </div>
     <div class="dbar">${p.highlight ? '' : `<button class="chip dchip ${S.get().settings.showBack !== false ? 'on' : ''}" id="showback">裏面</button>`}${showDChip()}</div>
+    <div class="wide2"><div class="wmain">
     <div id="lscene" class="scene anim-view"></div>
     <div class="pager"><button id="lprev" ${idx ? '' : 'disabled'}>‹ 前のケース</button><button id="lnext" ${idx < list.length - 1 ? '' : 'disabled'}>次のケース ›</button></div>
     <div class="sub lrec">${rec ? `このケースの練習: ${rec.n}回 ・ 正解 ${rec.correct}回(${pct(rec.correct, rec.n)}%)` : 'このケースはまだ練習していません'}</div>
+    </div><div class="wside">
     <div class="feedback">${sbTable(p)}<div class="animhint">キューブをタップで停止/再生(どちらも最初の局面から)、右の余白で1手進む、左の余白で1手戻る。表の手順をタップするとその手順を再生します</div></div>
-    <button class="btn primary" id="lpractice" style="margin-top:12px">このケースを練習<small>手順入力で、このケースだけをくり返し出題します</small></button>`;
+    <button class="btn primary" id="lpractice" style="margin-top:12px">このケースを練習<small>手順入力で、このケースだけをくり返し出題します</small></button>
+    </div></div>`;
   const sceneEl = app.querySelector('#lscene');
   const view = newLearnView(sceneEl, 0.48);
   view.showBack(!p.highlight && S.get().settings.showBack !== false);
@@ -1454,12 +1473,13 @@ function renderSearch() {
       <div style="text-align:center;flex:1;min-width:0"><div style="font-weight:800">SB 検索</div><div class="sub">R面の色(${rCol})のステッカーの位置をタップ</div></div>
       <div style="width:40px"></div>
     </div>
+    <div class="wide2"><div class="wmain">
     <div class="chips sside" id="sside">${Object.entries(SQ_LABEL).map(([k, v]) => `<button class="chip" data-side="${k}">${v}</button>`).join('')}</div>
     <div class="spieces" id="spieces"></div>
     <div class="dbar"><button class="chip dchip" id="sreset">リセット</button></div>
     <div id="sscene" class="scene searchscene"></div>
     <div class="sub shint" id="shint"></div>
-    <div id="sres"></div>`;
+    </div><div class="wside"><div id="sres"></div></div></div>`;
   const view = newLearnView(app.querySelector('#sscene'), 0.5);
   view.allowHideD = false; // 指定用のキューブは常に D 面の色も見せる
   if (s.view) view.setView(...s.view);
@@ -1970,4 +1990,75 @@ if (S.openToday()) {
   const t = S.today();
   showModal(`<div class="huge">🎁</div><h3>ログインボーナス</h3><div class="sub">ログインで +10 XP!<br>今日のノルマ ${S.get().settings.dailyGoal}問 をクリアすると<br>スタンプと ${S.stampReward(streak + 1)} XP がもらえます</div>
     ${stampCard(streak, t.goalDone)}<div style="height:12px"></div>`, render);
+}
+
+// ===== キーボード操作(パソコン向け) =====
+// ボタンを押したのと同じ処理を呼ぶ(押した瞬間に入力するボタンは pointerdown を送る)
+function pressDown(el) {
+  if (!el || el.disabled) return false;
+  el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }));
+  return true;
+}
+function pressClick(el) {
+  if (!el || el.disabled || el.closest('[hidden]')) return false;
+  el.click();
+  return true;
+}
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+  const k = e.key;
+  const enter = k === 'Enter' || k === ' ';
+  // マウスで押したボタンにフォーカスが残っていると Enter/スペースで二重に押されるので外す
+  if (t && t.tagName === 'BUTTON') t.blur();
+  let done = false;
+  // 確認画面・お知らせ
+  if (sheetRoot.firstChild) {
+    if (k === 'Escape') done = pressClick(sheetRoot.querySelector('#no'));
+  } else if (modalRoot.querySelector('[data-close]')) {
+    if (enter || k === 'Escape') done = pressClick(modalRoot.querySelector('[data-close]'));
+  } else if (quiz && quiz.view) {
+    done = quizKey(e, k, enter);
+  } else if (learn) {
+    if (k === 'Escape') done = pressClick(app.querySelector('#lback, #lclose, #sclose'));
+    else if (k === 'ArrowLeft') done = pressClick(app.querySelector('#lprev, .pager [data-pg="-1"]'));
+    else if (k === 'ArrowRight') done = pressClick(app.querySelector('#lnext, .pager [data-pg="1"]'));
+  }
+  if (done) e.preventDefault();
+  else if (k === ' ' && document.body.classList.contains('quiz-mode')) e.preventDefault();
+});
+function quizKey(e, k, enter) {
+  const q = (sel) => app.querySelector(sel);
+  if (k === 'Escape') return pressClick(q('#quit'));
+  const p = quiz.current;
+  if (!p) return false;
+  if (quiz.answered) {
+    if (enter || k === 'ArrowRight') return pressClick(q('#next')) || pressClick(q('#eosubmit'));
+    return false;
+  }
+  const lower = k.length === 1 ? k.toLowerCase() : k;
+  if (k === '/' || k === '?') return pressClick(q('#reveal'));
+  if (p.inputPad) {
+    if (enter) return pressClick(q('#padok'));
+    if (k === 'Backspace') return pressClick(q('#padback'));
+    if (k === 'Delete') return pressClick(q('#padclear'));
+    if (lower === 'h') return pressClick(q('#padhint'));
+    const face = Object.keys(MOVE_KEYS).find((f) => MOVE_KEYS[f] === lower);
+    if (!face) return false;
+    const mv = face + (e.shiftKey ? "'" : '');
+    return pressDown([...app.querySelectorAll('.padbtn[data-mv]')].find((b) => b.dataset.mv === mv));
+  }
+  // AUF の行
+  const aufKeys = p.eoAnswers ? AUF_KEYS_EO : AUF_KEYS;
+  const ai = aufKeys.indexOf(lower);
+  if (ai >= 0 && !q('#aufrow').hidden) return pressDown(q('#aufrow').querySelectorAll('.aufbtn')[ai]);
+  if (p.eoAnswers) {
+    if (enter) return pressClick(q('#eosubmit'));
+    const arrow = { ArrowUp: 'UB', ArrowLeft: 'UL', ArrowRight: 'UR', ArrowDown: 'UF' }[k];
+    const pos = arrow || Object.keys(EO_KEYS).find((x) => EO_KEYS[x].toLowerCase() === lower);
+    return pos ? pressDown(q(`.eocell[data-pos="${pos}"]`)) : false;
+  }
+  if (/^[1-9]$/.test(k)) return pressClick(q(`.choice[data-i="${Number(k) - 1}"]`));
+  return false;
 }
