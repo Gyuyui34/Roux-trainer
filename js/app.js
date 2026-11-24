@@ -43,7 +43,7 @@ const PAD_MOVES = ["U'", 'U', "M'", 'r', 'R', 'M', "r'", "R'"];
 const MOVE_KEYMAP = { i: 'R', k: "R'", j: 'U', f: "U'", u: 'r', m: "r'", 5: 'M', 6: 'M', a: 'M', x: "M'", '.': "M'", s: "M'" };
 const AUF_KEYS = ['z', 'x', 'c', 'v'];
 const AUF_KEYS_EO = ['1', '2', '3', '4'];
-const EO_KEYS = { UB: 'W', UL: 'A', UR: 'D', UF: 'S', DB: 'I', DF: 'K/J' };
+const EO_KEYS = { UB: 'W', UL: 'A', UR: 'D', UF: 'S/X', DB: 'I', DF: 'K/J' };
 function kbdOf(m) {
   const k = Object.keys(MOVE_KEYMAP).filter((x) => MOVE_KEYMAP[x] === m).map((x) => x.toUpperCase()).join('/');
   return k ? `<kbd class="kbd">${k}</kbd>` : '';
