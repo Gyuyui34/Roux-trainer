@@ -43,7 +43,7 @@ const PAD_MOVES = ["U'", 'U', "M'", 'r', 'R', 'M', "r'", "R'"];
 const MOVE_KEYMAP = { i: 'R', k: "R'", j: 'U', f: "U'", u: 'r', m: "r'", 5: 'M', 6: 'M', a: 'M', x: "M'", '.': "M'", s: "M'" };
 const AUF_KEYS = ['z', 'x', 'c', 'v'];
 const AUF_KEYS_EO = ['1', '2', '3', '4'];
-const EO_KEYS = { UB: 'W', UL: 'A', UR: 'D', UF: 'S', DB: 'I', DF: 'K' };
+const EO_KEYS = { UB: 'W', UL: 'A', UR: 'D', UF: 'S', DB: 'I', DF: 'K/J' };
 function kbdOf(m) {
   const k = Object.keys(MOVE_KEYMAP).filter((x) => MOVE_KEYMAP[x] === m).map((x) => x.toUpperCase()).join('/');
   return k ? `<kbd class="kbd">${k}</kbd>` : '';
@@ -2055,7 +2055,7 @@ function quizKey(e, k, enter) {
   if (p.eoAnswers) {
     if (enter) return pressClick(q('#eosubmit'));
     const arrow = { ArrowUp: 'UB', ArrowLeft: 'UL', ArrowRight: 'UR', ArrowDown: 'UF' }[k];
-    const pos = arrow || Object.keys(EO_KEYS).find((x) => EO_KEYS[x].toLowerCase() === lower);
+    const pos = arrow || Object.keys(EO_KEYS).find((x) => EO_KEYS[x].toLowerCase().split('/').includes(lower));
     return pos ? pressDown(q(`.eocell[data-pos="${pos}"]`)) : false;
   }
   if (/^[1-9]$/.test(k)) return pressClick(q(`.choice[data-i="${Number(k) - 1}"]`));
