@@ -43,7 +43,7 @@ const PAD_MOVES = ["U'", 'U', "M'", 'r', 'R', 'M', "r'", "R'"];
 const MOVE_KEYMAP = { i: 'R', k: "R'", j: 'U', f: "U'", u: 'r', m: "r'", 5: 'M', 6: 'M', a: 'M', x: "M'", '.': "M'", s: "M'" };
 const AUF_KEYS = ['z', 'x', 'c', 'v'];
 const AUF_KEYS_EO = ['1', '2', '3', '4'];
-const EO_KEYS = { UB: 'W', UL: 'A', UR: 'D', UF: 'S/X', DB: 'I', DF: 'K/J' };
+const EO_KEYS = { UB: ['W'], UL: ['A'], UR: ['D'], UF: ['S', 'X'], DB: ['I', '@'], DF: ['K', 'J', '/'] }; // @ と / は日本語キーボードの位置(ユーザー指定)
 function kbdOf(m) {
   const k = Object.keys(MOVE_KEYMAP).filter((x) => MOVE_KEYMAP[x] === m).map((x) => x.toUpperCase()).join('/');
   return k ? `<kbd class="kbd">${k}</kbd>` : '';
@@ -1210,7 +1210,7 @@ function openCasePicker() {
 
 // U 面(上から見た図)の右に、D 面のエッジを後ろ→前の順で縦に並べる(行の高さを揃えて前後を対応させる)
 function eoBoard(p) {
-  const cell = (pos, label) => `<button class="eocell" data-pos="${pos}"><b>${label}</b><span>${pos}</span><kbd class="kbd">${EO_KEYS[pos]}</kbd></button>`;
+  const cell = (pos, label) => `<button class="eocell" data-pos="${pos}"><b>${label}</b><span>${pos}</span><kbd class="kbd">${EO_KEYS[pos].join(' ')}</kbd></button>`;
   return `<div class="eoboard">
       <div class="eopanel"><div class="eotitle">U面のエッジ</div>
         <div class="eogrid">
@@ -2038,7 +2038,7 @@ function quizKey(e, k, enter) {
     return false;
   }
   const lower = k.length === 1 ? k.toLowerCase() : k;
-  if (k === '/' || k === '?') return pressClick(q('#reveal'));
+  if ((k === '/' || k === '?') && q('#reveal')) return pressClick(q('#reveal'));
   if (p.inputPad) {
     if (enter) return pressClick(q('#padok'));
     if (k === 'Backspace') return pressClick(q('#padback'));
@@ -2055,7 +2055,7 @@ function quizKey(e, k, enter) {
   if (p.eoAnswers) {
     if (enter) return pressClick(q('#eosubmit'));
     const arrow = { ArrowUp: 'UB', ArrowLeft: 'UL', ArrowRight: 'UR', ArrowDown: 'UF' }[k];
-    const pos = arrow || Object.keys(EO_KEYS).find((x) => EO_KEYS[x].toLowerCase().split('/').includes(lower));
+    const pos = arrow || Object.keys(EO_KEYS).find((x) => EO_KEYS[x].some((c) => c.toLowerCase() === lower));
     return pos ? pressDown(q(`.eocell[data-pos="${pos}"]`)) : false;
   }
   if (/^[1-9]$/.test(k)) return pressClick(q(`.choice[data-i="${Number(k) - 1}"]`));
