@@ -2005,7 +2005,7 @@ function pressClick(el) {
   return true;
 }
 document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing || e.repeat) return; // 押しっぱなしの自動リピートで選択が切り替わらないように
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
   const k = e.key;
