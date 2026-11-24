@@ -40,7 +40,7 @@ const SQ_LABEL = { front: 'Front square', back: 'Back square' };
 const PAD_MOVES = ["U'", 'U', "M'", 'r', 'R', 'M', "r'", "R'"];
 // パソコンのキーボード操作(広い画面のときだけボタンにキーを表示する)
 // 手順入力: csTimer のバーチャルキューブと同じキー(ユーザー指定)
-const MOVE_KEYMAP = { i: 'R', k: "R'", j: 'U', f: "U'", u: 'r', m: "r'", 5: 'M', 6: 'M', x: "M'", '.': "M'" };
+const MOVE_KEYMAP = { i: 'R', k: "R'", j: 'U', f: "U'", u: 'r', m: "r'", 5: 'M', 6: 'M', a: 'M', x: "M'", '.': "M'", s: "M'" };
 const AUF_KEYS = ['z', 'x', 'c', 'v'];
 const AUF_KEYS_EO = ['1', '2', '3', '4'];
 const EO_KEYS = { UB: 'W', UL: 'A', UR: 'D', UF: 'S', DB: 'I', DF: 'K' };
