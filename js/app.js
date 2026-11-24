@@ -39,14 +39,14 @@ const SQ_LABEL = { front: 'Front square', back: 'Back square' };
 // 並び: U' | U | r / r' | R / R' (U' と U は縦 2 段分)
 const PAD_MOVES = ["U'", 'U', "M'", 'r', 'R', 'M', "r'", "R'"];
 // パソコンのキーボード操作(広い画面のときだけボタンにキーを表示する)
-// 手順入力: 小文字キー = 時計回り、Shift + キー = 逆回り。r(ワイド)は W キー
-const MOVE_KEYS = { U: 'u', M: 'm', R: 'r', r: 'w' };
+// 手順入力: csTimer のバーチャルキューブと同じキー(ユーザー指定)
+const MOVE_KEYMAP = { i: 'R', k: "R'", j: 'U', f: "U'", u: 'r', m: "r'", 5: 'M', 6: 'M', x: "M'", '.': "M'" };
 const AUF_KEYS = ['z', 'x', 'c', 'v'];
 const AUF_KEYS_EO = ['1', '2', '3', '4'];
 const EO_KEYS = { UB: 'W', UL: 'A', UR: 'D', UF: 'S', DB: 'I', DF: 'K' };
 function kbdOf(m) {
-  const k = MOVE_KEYS[m[0]];
-  return k ? `<kbd class="kbd">${m.endsWith("'") ? '⇧' : ''}${k.toUpperCase()}</kbd>` : '';
+  const k = Object.keys(MOVE_KEYMAP).filter((x) => MOVE_KEYMAP[x] === m).map((x) => x.toUpperCase()).join('/');
+  return k ? `<kbd class="kbd">${k}</kbd>` : '';
 }
 const KIND_LABEL = { alg: '手順を当てる', eo: 'CMLL後のEO' };
 const AUF_LABEL = { none: 'AUFなし', random: 'AUFランダム' };
@@ -2044,9 +2044,8 @@ function quizKey(e, k, enter) {
     if (k === 'Backspace') return pressClick(q('#padback'));
     if (k === 'Delete') return pressClick(q('#padclear'));
     if (lower === 'h') return pressClick(q('#padhint'));
-    const face = Object.keys(MOVE_KEYS).find((f) => MOVE_KEYS[f] === lower);
-    if (!face) return false;
-    const mv = face + (e.shiftKey ? "'" : '');
+    const mv = MOVE_KEYMAP[lower];
+    if (!mv || e.shiftKey) return false;
     return pressDown([...app.querySelectorAll('.padbtn[data-mv]')].find((b) => b.dataset.mv === mv));
   }
   // AUF の行
