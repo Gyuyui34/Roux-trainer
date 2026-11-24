@@ -300,6 +300,19 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 .padbtn:disabled { opacity: .5; }
 .feedback .via { margin-left: 8px; font-size: 13px; font-weight: 800; color: var(--ok); }
 .seqsum .hit { color: var(--ok); font-weight: 800; }
+/* CMLL をキューブで揃える(パソコンのキーボード操作) */
+.solvebox { display: grid; gap: 10px; }
+.solvestat { display: flex; gap: 12px; }
+.solvestat > div { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+.solvestat b { font: 800 28px ui-monospace, Menlo, monospace; }
+.solvebox .seq { justify-content: flex-start; flex-wrap: wrap; word-break: break-all; }
+.solvebox .padrow { grid-template-columns: 1fr 1fr; }
+.solvebox .padbtn small { display: block; font-size: 10px; opacity: .6; }
+.keyguide summary { cursor: pointer; color: var(--sub); font-size: 13px; }
+.skeys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.skeys span { display: inline-flex; align-items: center; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; font-size: 13px; }
+.skeys .kbd { margin-left: 4px; }
+.feedback .mono { white-space: pre-line; }
 .anim-label { position: absolute; left: 0; top: 4px; max-width: 70%; font: 700 14px ui-monospace, "SF Mono", Menlo, monospace; padding: 4px 8px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); color: var(--sub); pointer-events: none; }
 .anim-label .done { color: var(--text); }
 .anim-label .pause { color: var(--accent); }

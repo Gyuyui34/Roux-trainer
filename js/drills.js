@@ -95,6 +95,29 @@ const CASE_BY_KEY = new Map(CMLL_CASES.map((c) => [c.key, c]));
 // 貼り付けられた手順がどの CMLL ケースを解くか。読めない・F2B が崩れる・CMLL でない場合は理由を返す。
 // 実際にその盤面(F2B は左右)に手順をかけて確かめる。最後の持ち替えと前後の AUF は許す。
 const cornersUpToAuf = (s) => AUFS.some((a) => C.isSolvedAt(C.applyAlg(s, parse(a)), UC));
+// CMLL まで終わったか(持ち替え・M 列のずれ・最後の AUF は問わない)
+export const cmllDone = (state) => {
+  const s = orientF2B(state);
+  return !!s && cornersUpToAuf(s);
+};
+
+// CMLL をバーチャルキューブで揃える(パソコンのキーボード操作)。盤面は CMLL の出題と同じ
+function genCmllSolve(opts) {
+  const p = genCmll(opts);
+  const random = opts.auf === 'random';
+  const auf = random ? p.aufAnswers[0] : '';
+  return {
+    ...p,
+    drill: random ? 'cmllSolveAuf' : 'cmllSolve',
+    solveCube: true,
+    aufAnswers: null,
+    choices: null,
+    answer: null,
+    prompt: random ? 'キーボードでCMLLを揃えてください(手順の前のAUFも自分で)' : 'キーボードでCMLLを揃えてください',
+    revealAlg: [...(auf ? [auf] : []), ...C.parseAlg(p.alg)].join(' '),
+  };
+}
+
 export function solvesCase(c, moves) {
   const P = C.applyAlg(C.solved(), c.inv);
   return AUFS.some((a) => {
@@ -255,6 +278,7 @@ function genCmll(opts) {
     choices: items.map((c) => ({ label: opts.algOf ? opts.algOf(c) : c.alg, sub: c.set })),
     answer: items.indexOf(target),
     caseKey: target.name,
+    alg: algText,
     explain: `${target.set}セット: ${opts.auf === 'random' ? `${aufAnswers.map((a) => a || 'AUFなし').join(' / ')} → ` : ''}${algText}`,
   };
 }
@@ -915,6 +939,8 @@ export const DRILLS = {
   cmllEo: { name: 'CMLL→EO', full: 'CMLL後のEO', gen: (o) => genCmllEo({ ...o, auf: 'none' }), view: [-35, -30] },
   cmllEoAuf: { name: 'CMLL→EO+AUF', full: 'CMLL後のEO(AUFランダム)', gen: (o) => genCmllEo({ ...o, auf: 'random' }), view: [-35, -30] },
   cmllAuf: { name: 'CMLL+AUF', full: 'CMLL(AUFランダム)', gen: (o) => genCmll({ ...o, auf: 'random' }), view: [-35, -30] },
+  cmllSolve: { name: 'CMLL揃え', full: 'CMLLをキューブで揃える', gen: (o) => genCmllSolve({ ...o, auf: 'none' }), view: [-35, -30] },
+  cmllSolveAuf: { name: 'CMLL揃え+AUF', full: 'CMLLをキューブで揃える(AUFランダム)', gen: (o) => genCmllSolve({ ...o, auf: 'random' }), view: [-35, -30] },
   sbSolve: { name: 'SB手順入力', full: 'SBのsquareを手順で', gen: genSbSolve, view: [-28, -35], noSlot: true },
   sbSq: { name: 'SB square', full: 'SBのsquare', gen: genSbSquare, view: [-28, -35], noSlot: true },
   lseEo: { name: 'LSE EO', full: 'LSEのEOを手順で', gen: genLseEo, view: [-35, -30], noSlot: true },

@@ -1,6 +1,6 @@
 // node tests/verify.mjs : 手順表と出題生成の検証
 import * as C from '../js/cube.js';
-import { CMLL_CASES, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext, sbSearch, sbPlaceSpots, SEARCH_PIECES } from '../js/drills.js';
+import { CMLL_CASES, cmllDone, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext, sbSearch, sbPlaceSpots, SEARCH_PIECES } from '../js/drills.js';
 
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('NG:', msg); } };
@@ -360,6 +360,16 @@ for (const q of [2, 6, 11]) {
   check(ev.some((e) => e.type === 'rankup'), 'rankup event');
   check(S.rankOf(799).name === 'ブロンズ' && S.rankOf(1000).name === 'ゴールド', 'ranks');
 }
+// CMLL をキューブで揃える: 出題時は未完成、答えの手順で完成、持ち替え・M・AUF を足しても完成、R で崩れる
+for (let i = 0; i < 100; i++) {
+  const p = generate(i % 2 ? 'cmllSolveAuf' : 'cmllSolve', {});
+  check(p.solveCube && !cmllDone(p.colors), 'cmllSolve start not solved');
+  const s = C.applyAlg(p.colors, p.revealAlg);
+  check(cmllDone(s), `cmllSolve reveal solves ${p.revealAlg}`);
+  for (const t of ['y', 'x2', "z'", 'M', 'U2', "x y2 M' z"]) check(cmllDone(C.applyAlg(s, t)), `cmllSolve after ${t}`);
+  check(!cmllDone(C.applyAlg(s, 'R')), 'cmllSolve R breaks');
+}
+console.log('cmllSolve ok');
 console.log('cmllEo bad-edge counts', JSON.stringify(dist));
 console.log(fail ? `${fail} failures` : 'all passed');
 process.exit(fail ? 1 : 0);

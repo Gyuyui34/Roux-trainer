@@ -1,9 +1,9 @@
 import * as S from './store.js';
 import * as FX from './fx.js';
-import { generate, DRILLS, CMLL_CASES, identifyCmll, solvesCase, solvesSquare, mergeMoves, qtmLen, DR_POSITIONS, DR_ORIS, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext, sbSearch, sbPlaceSpots, slotOf, SEARCH_PIECES } from './drills.js';
+import { generate, DRILLS, CMLL_CASES, cmllDone, identifyCmll, solvesCase, solvesSquare, mergeMoves, qtmLen, DR_POSITIONS, DR_ORIS, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext, sbSearch, sbPlaceSpots, slotOf, SEARCH_PIECES } from './drills.js';
 import { CMLL_SETS } from './cmll.js';
 import { CubeView, ORIENTATIONS, COLOR_JA, COLOR_HEX, schemeFor } from './view3d.js';
-import { applyAlg, solved } from './cube.js';
+import { applyAlg, solved, parseAlg } from './cube.js';
 import { Player, u2p, invMove } from './player.js';
 import { EDGE_POS, BAD_COUNTS, START_LENS, eoCount, solvesEo } from './lse.js';
 import { LR_BAD_COUNTS, EOLR_LENS, eolrCount, solvesEolr } from './eolr.js';
@@ -25,7 +25,9 @@ const drillOf = (cfg) => {
   if (cfg.menu === 'eolr') return 'eolr';
   if (cfg.menu === 'eolrb') return 'eolrb';
   if (cfg.menu === 'sbSolve' || cfg.menu === 'sbLearn' || cfg.menu === 'sbSearch') return 'sbSolve';
-  const base = cfg.kind === 'eo' ? (cfg.auf === 'random' ? 'cmllEoAuf' : 'cmllEo') : (cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
+  const base = cfg.kind === 'eo' ? (cfg.auf === 'random' ? 'cmllEoAuf' : 'cmllEo')
+    : cfg.kind === 'solve' ? (cfg.auf === 'random' ? 'cmllSolveAuf' : 'cmllSolve')
+    : (cfg.auf === 'random' ? 'cmllAuf' : 'cmll');
   return S.get().settings.algSlot === 'oh' ? `${base}Oh` : base;
 };
 // 練習するケース: 選んだセットのうち、個別に外したケースを除いたもの
@@ -48,7 +50,19 @@ function kbdOf(m) {
   const k = Object.keys(MOVE_KEYMAP).filter((x) => MOVE_KEYMAP[x] === m).map((x) => x.toUpperCase()).join('/');
   return k ? `<kbd class="kbd">${k}</kbd>` : '';
 }
-const KIND_LABEL = { alg: '手順を当てる', eo: 'CMLL後のEO' };
+const KIND_LABEL = { alg: '手順を当てる', eo: 'CMLL後のEO', solve: 'キューブで揃える' };
+// パソコン向け表示(広い画面)か。CSS の @media と同じ条件
+const isWide = () => matchMedia('(min-width: 900px) and (min-height: 560px)').matches;
+const kindLabels = () => (isWide() ? KIND_LABEL : { alg: KIND_LABEL.alg, eo: KIND_LABEL.eo });
+// CMLL をキューブで揃えるモード: csTimer のバーチャルキューブと同じキー割り当て(ユーザー指定)
+const SOLVE_KEYMAP = {
+  i: 'R', k: "R'", d: 'L', e: "L'", j: 'U', f: "U'", s: 'D', l: "D'", h: 'F', g: "F'", w: 'B', o: "B'",
+  u: 'r', m: "r'", v: 'l', r: "l'", 5: 'M', 6: 'M', x: "M'", '.': "M'",
+  t: 'x', y: 'x', b: "x'", n: "x'", ';': 'y', a: "y'", p: 'z', q: "z'",
+  z: 'd', '/': "d'", c: "u'", ',': 'u',
+};
+const SOLVE_GUIDE = [['R', "R'", 'L', "L'", 'U', "U'", 'D', "D'", 'F', "F'", 'B', "B'"], ['r', "r'", 'l', "l'", 'M', "M'", 'u', "u'", 'd', "d'"], ['x', "x'", 'y', "y'", 'z', "z'"]];
+const solveKeysOf = (m) => Object.keys(SOLVE_KEYMAP).filter((k) => SOLVE_KEYMAP[k] === m).map((k) => k.toUpperCase()).join(' ');
 const AUF_LABEL = { none: 'AUFなし', random: 'AUFランダム' };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
@@ -59,7 +73,8 @@ const fmtTime = (ms) => {
 const accColor = (p) => (p >= 90 ? 'var(--ok)' : p >= 70 ? 'var(--accent)' : 'var(--ng)');
 
 // 復習する間違い(今あるモードのものだけ)
-const liveMistakes = () => S.get().mistakes.filter((m) => DRILLS[baseDrill(m.drill)]);
+// キューブで揃える問題はキーボード操作なので、パソコン向け表示のときだけ
+const liveMistakes = () => S.get().mistakes.filter((m) => DRILLS[baseDrill(m.drill)] && (isWide() || !baseDrill(m.drill).startsWith('cmllSolve')));
 
 // SB 学習では「短い方」を front として扱う(設定は残す)
 const learnSideFix = (cfg) => (cfg.sbSide === 'both' ? { ...cfg, sbSide: 'front' } : cfg);
@@ -80,6 +95,7 @@ function practiceCfg() {
   if (!(cfg.sbLenMax >= cfg.sbLen)) cfg.sbLenMax = cfg.sbLen;
   if (!(cfg.sbLenQMax >= cfg.sbLenQ && cfg.sbLenQMax <= 11)) cfg.sbLenQMax = cfg.sbLenQ;
   if (!MENU_LABEL[cfg.menu]) cfg.menu = 'cmll';
+  if (!KIND_LABEL[cfg.kind] || (cfg.kind === 'solve' && !isWide())) cfg.kind = 'alg';
   if (!['len', 'pos'].includes(cfg.eoBy)) cfg.eoBy = 'len';
   if (!START_LENS.includes(cfg.eoLen)) cfg.eoLen = 5;
   if (!Array.isArray(cfg.eoCounts) || !cfg.eoCounts.length) cfg.eoCounts = [...BAD_COUNTS];
@@ -280,12 +296,14 @@ function renderHome() {
         <span class="sub">〜</span><select id="sbmax">${sqLens.slice(SB_GAP).map((n) => `<option value="${n}" ${n === sbMax ? 'selected' : ''}>${n}手</option>`).join('')}</select></div></div>
       <div class="sub desc">FBだけ揃った状態から、SBのsquare(DRエッジ+コーナー+エッジの2×2×1)を作る最短手数と、Front square / Back square のどちらが短いかを答えます。${sqQ ? '手数はQSTM(R r U M の90°を1手、180°は2手)で数えます。' : '手数はSTM(R r U M を1手、180°も1手)で数えます。'}同じ手数なら両方正解です。</div>` : `
       <div class="opt"><span class="sub">問題の種類</span>
-        <div class="chips" id="kind">${Object.entries(KIND_LABEL).map(([k, v]) => `<button class="chip ${cfg.kind === k ? 'on' : ''}" data-kind="${k}">${v}</button>`).join('')}</div></div>
+        <div class="chips" id="kind">${Object.entries(kindLabels()).map(([k, v]) => `<button class="chip ${cfg.kind === k ? 'on' : ''}" data-kind="${k}">${v}</button>`).join('')}</div></div>
       <div class="opt"><span class="sub">手順</span>
         <div class="chips" id="slothome">${Object.entries(SLOT_NAMES).map(([k, v]) => `<button class="chip ${d.settings.algSlot === k ? 'on' : ''}" data-slot="${k}">${v}</button>`).join('')}</div></div>
       <div class="opt"><span class="sub">出題モード</span>
         <div class="chips" id="aufmode">${Object.entries(AUF_LABEL).map(([k, v]) => `<button class="chip ${cfg.auf === k ? 'on' : ''}" data-auf="${k}">${v}</button>`).join('')}</div></div>
-      <div class="sub" style="margin:-4px 0 12px">${cfg.kind === 'eo'
+      <div class="sub" style="margin:-4px 0 12px">${cfg.kind === 'solve'
+        ? `キーボードでバーチャルキューブを回してCMLLを揃えます(キー割り当ては csTimer と同じ)。${cfg.auf === 'random' ? '向きがランダムに変わるので、手順の前のAUFも自分で回します。' : '手順表の手順をそのままかけられる向きで出題します。'}F2Bを崩さずに4つのコーナーが揃えば完了です(最後のAUF・M列のずれ・持ち替えは問いません)。`
+        : cfg.kind === 'eo'
         ? (cfg.auf === 'random' ? '向きがランダムに変わります。手順の前のAUFを選び、手順表の手順を回した後に向きが揃っていないLSEのエッジをすべて選びます。' : '手順表の手順を回した後、向きが揃っていないLSEのエッジをすべて選びます。')
         : (cfg.auf === 'random' ? '向きがランダムに変わります。手順の前のAUFも選んで答えます。' : '手順表の手順をそのままかけられる向きで出題します。')}</div>
       <div class="opt" style="margin-bottom:0"><span class="sub">CMLL のセット</span></div>
@@ -293,7 +311,7 @@ function renderHome() {
       <button class="btn" id="pickcases" style="margin:10px 0 0;padding:11px;font-size:15px">ケースを個別に選ぶ<small>選択中 ${nSel} / 42 ケース</small></button>
       <label class="set" style="border:0;padding-bottom:0"><span>苦手なケースを多めに出す<br><span class="sub">正答率が低いケースほど出やすくなります</span></span><input type="checkbox" id="weak" ${cfg.weak ? 'checked' : ''}></label>`}
     </div>
-    <div class="hgo">${isSearch ? '<button class="btn primary" id="go-search">🔍 検索をはじめる<small>SB 検索 ・ キューブをタップしてケースを指定</small></button>' : isLearn ? `<button class="btn primary" id="go-learn">ケース一覧を見る<small>SB 学習 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`} ・ ${learnList(cfg).length}ケース</small></button>` : `    <button class="btn primary" id="go-practice">練習スタート<small>${isEo ? `${kit.name} ・ ${lseEoLabel(cfg)}` : isSolve ? `SB 手順入力 ・ ${cfg.sbSide === 'both' ? 'Front/Backの短い方' : SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`}` : isSb ? `SB 手数当て ・ ${sqQ ? 'QSTM ' : ''}${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
+    <div class="hgo">${isSearch ? '<button class="btn primary" id="go-search">🔍 検索をはじめる<small>SB 検索 ・ キューブをタップしてケースを指定</small></button>' : isLearn ? `<button class="btn primary" id="go-learn">ケース一覧を見る<small>SB 学習 ・ ${SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`} ・ ${learnList(cfg).length}ケース</small></button>` : `    <button class="btn primary" id="go-practice">練習スタート<small>${isEo ? `${kit.name} ・ ${lseEoLabel(cfg)}` : isSolve ? `SB 手順入力 ・ ${cfg.sbSide === 'both' ? 'Front/Backの短い方' : SQ_LABEL[cfg.sbSide]} ・ ${cfg.sbBy === 'dr' ? pieceLabel(cfg) : `${cfg.sbMetric === 'qstm' ? 'QSTM ' : ''}${sbLenLabel(cfg)}`}` : isSb ? `SB 手数当て ・ ${sqQ ? 'QSTM ' : ''}${sbMin === sbMax ? `${sbMin}手` : `${sbMin}〜${sbMax}手`}` : `${cfg.kind === 'eo' ? 'CMLL後のEO' : cfg.kind === 'solve' ? 'CMLLを揃える' : 'CMLL'} ・ ${AUF_LABEL[cfg.auf]} ・ ${esc(setsLabel)} ・ ${SLOT_NAMES[d.settings.algSlot]}手順`}</small></button>
     <div class="row" style="gap:10px">
       <button class="btn blue" id="go-test" style="flex:1">⏱ テスト<small>${cfg.testN}問タイムアタック</small></button>
       <button class="btn" id="go-review" style="flex:1" ${reviewN ? '' : 'disabled'}>🔁 復習<small>間違えた問題 ${reviewN}</small></button>
@@ -799,7 +817,15 @@ function nextProblem() {
   app.querySelector('#scene').classList.toggle('compact', !!p.eoAnswers);
   app.querySelector('#scene').classList.remove('solved-view', 'anim-view');
   quiz.seq = [];
-  if (p.inputPad) {
+  quiz.solve = null;
+  if (p.solveCube) {
+    app.querySelector('#choices').innerHTML = solvePanel();
+    quiz.solve = { colors: p.colors, moves: [], firstT: null, resets: 0 };
+    app.querySelector('#solvereset').onclick = solveReset;
+    app.querySelector('#solvereveal').onclick = solveReveal;
+    showSolve();
+    tickSolve();
+  } else if (p.inputPad) {
     app.querySelector('#choices').innerHTML = `<div class="seq" id="seq"></div>
       ${p.padMoves ? `<div class="pad pad4">${p.padMoves.map((m) => `<button class="padbtn" data-mv="${esc(m)}">${esc(m)}${kbdOf(m)}</button>`).join('')}</div>`
     : `<div class="pad">${PAD_MOVES.map((m) => `<button class="padbtn${m[0] === 'U' ? ' tall' : ''}" data-mv="${esc(m)}">${esc(m)}${kbdOf(m)}</button>`).join('')}</div>`}
@@ -907,7 +933,7 @@ function settle(ok, rect, wrongMsg) {
     ${anim ? '<div class="animhint">キューブをタップで停止/再生(どちらも最初の局面から)、右の余白で1手進む、左の余白で1手戻る</div>' : ''}
     <details class="scr"><summary>この盤面の作り方(スクランブル)</summary><div class="mono">${esc(anim ? u2p(p.scramble) : p.scramble)}</div></details>`;
   if (autoNext) {
-    setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, p.eoAnswers ? 1600 : 800);
+    setTimeout(() => { if (quiz && !modalQueue.length) nextProblem(); else if (quiz) afterModals(nextProblem); }, p.eoAnswers ? 1600 : p.solveCube ? 1500 : 800);
   } else if (p.eoAnswers) {
     // CMLL後のEO: 「回答する」ボタンをそのまま目立つ「次へ」ボタンに変える(同じ位置・同じ大きさ)
     const sub = app.querySelector('#eosubmit');
@@ -1049,6 +1075,102 @@ function seqCube(before, m) {
     view.endMove();
     view.setColors(cs, hs);
   });
+}
+
+// ===== CMLL をキューブで揃える(パソコンのキーボード操作) =====
+function solvePanel() {
+  const row = (ms) => `<div class="skeys">${ms.map((m) => `<span><b>${esc(m)}</b><kbd class="kbd">${esc(solveKeysOf(m))}</kbd></span>`).join('')}</div>`;
+  return `<div class="solvebox">
+    <div class="solvestat"><div><div class="sub">手数</div><b id="solven">0</b></div><div><div class="sub">タイム</div><b id="solvet">0.00</b></div></div>
+    <div class="seq" id="solveseq"></div>
+    <div class="padrow"><button class="padbtn sm" id="solvereset">↺ 最初の盤面に戻す<kbd class="kbd">BS</kbd></button><button class="padbtn sm" id="solvereveal">答えを見る<kbd class="kbd">Tab</kbd><small>不正解</small></button></div>
+    <details class="keyguide" open><summary>キー割り当て(csTimer と同じ)</summary>${SOLVE_GUIDE.map(row).join('')}</details>
+  </div>`;
+}
+
+function showSolve() {
+  const sv = quiz && quiz.solve;
+  if (!sv) return;
+  const n = app.querySelector('#solven');
+  if (n) n.textContent = sv.moves.length;
+  const seq = app.querySelector('#solveseq');
+  if (seq) seq.innerHTML = sv.moves.length ? `<span class="mono">${esc(sv.moves.join(' '))}</span>` : '<span class="sub">キーを押すとキューブが回ります</span>';
+}
+
+// 解いている間のタイム表示(問題を出してからの時間)
+function tickSolve() {
+  const sv = quiz && quiz.solve;
+  if (!sv || quiz.answered || sv.ticking) return;
+  sv.ticking = true;
+  const step = () => {
+    if (!quiz || quiz.solve !== sv || quiz.answered) { sv.ticking = false; return; }
+    const el = app.querySelector('#solvet');
+    if (el) el.textContent = ((performance.now() - quiz.shownT) / 1000).toFixed(2);
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// キューブを 1 手回す。前の手のアニメーションが残っていたら打ち切って次の手を回す
+function solveMove(m) {
+  const sv = quiz.solve;
+  const before = sv.colors;
+  sv.colors = applyAlg(before, [m]);
+  sv.moves.push(m);
+  if (sv.firstT == null) sv.firstT = performance.now();
+  const view = quiz.view;
+  view.cancelMove();
+  view.setColors(before, null);
+  view.beginMove(m);
+  const after = sv.colors;
+  view.tween(1, m.includes('2') ? 160 : 110).then((ok) => {
+    if (!ok) return;
+    view.endMove();
+    view.setColors(after, null);
+  });
+  showSolve();
+  tickSolve();
+  if (cmllDone(sv.colors)) {
+    const p = quiz.current;
+    const now = performance.now();
+    const total = now - quiz.shownT, exec = now - sv.firstT;
+    p.explain = `${p.explain}\n${sv.moves.length}手(手順は${parseAlg(p.alg).length}手) ・ ${fmtTime(total)}(観察 ${fmtTime(total - exec)} + 実行 ${fmtTime(exec)})${sv.resets ? ` ・ やり直し${sv.resets}回` : ''}`;
+    quiz.answered = true;
+    app.querySelector('#solveseq').classList.add('correct');
+    app.querySelector('#solvet').textContent = (total / 1000).toFixed(2);
+    hideSolveBtns();
+    settle(true, app.querySelector('#solveseq').getBoundingClientRect());
+  }
+}
+
+function hideSolveBtns() {
+  app.querySelectorAll('.solvebox .padrow').forEach((el) => { el.hidden = true; });
+}
+
+// 最初の盤面に戻す(タイムはそのまま進む)
+function solveReset() {
+  const sv = quiz && quiz.solve;
+  if (!sv || quiz.answered) return;
+  if (sv.moves.length) sv.resets++;
+  sv.colors = quiz.current.colors;
+  sv.moves = [];
+  quiz.view.cancelMove();
+  quiz.view.setColors(sv.colors, null);
+  FX.sfxTick();
+  showSolve();
+}
+
+// 答えを見る: 不正解として記録し、手順表の手順を最初の盤面から再生する
+function solveReveal() {
+  const sv = quiz && quiz.solve;
+  if (!sv || quiz.answered) return;
+  quiz.answered = true;
+  const p = quiz.current;
+  app.querySelector('#solveseq').classList.add('wrong');
+  hideSolveBtns();
+  quiz.view.cancelMove();
+  settle(false, app.querySelector('#solvereveal').getBoundingClientRect(), '答え');
+  if (quiz && quiz.current === p && quiz.mode !== 'test') playAlg(p.revealAlg);
 }
 
 // SB 手順入力: 入力した手順で square が揃えば正解
@@ -1719,7 +1841,7 @@ function caseChart(all) {
   </svg>`;
 }
 
-const CASE_MODES = [['cmll', '手順・AUFなし'], ['cmllAuf', '手順・AUFランダム'], ['cmllEo', 'EO・AUFなし'], ['cmllEoAuf', 'EO・AUFランダム']];
+const CASE_MODES = [['cmll', '手順・AUFなし'], ['cmllAuf', '手順・AUFランダム'], ['cmllEo', 'EO・AUFなし'], ['cmllEoAuf', 'EO・AUFランダム'], ['cmllSolve', '揃える・AUFなし'], ['cmllSolveAuf', '揃える・AUFランダム']];
 let caseMode = 'cmll';
 let caseSlot = null;
 function histCases(body) {
@@ -1987,6 +2109,9 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
     reloadIfIdle();
   });
 }
+// 画面の広さが変わったら、ホームの「キューブで揃える」の表示を切り替える
+matchMedia('(min-width: 900px) and (min-height: 560px)').addEventListener('change', () => { if (!quiz && tab === 'home' && !learn) render(); });
+
 render();
 if (S.openToday()) {
   const streak = S.streakNow();
@@ -2041,6 +2166,14 @@ function quizKey(e, k, enter) {
     return false;
   }
   const lower = k.length === 1 ? k.toLowerCase() : k;
+  if (p.solveCube) {
+    if (k === 'Backspace') { solveReset(); return true; }
+    if (k === 'Tab') { solveReveal(); return true; }
+    const mv = SOLVE_KEYMAP[lower];
+    if (!mv) return false;
+    solveMove(mv);
+    return true;
+  }
   if ((k === '/' || k === '?') && q('#reveal')) return pressClick(q('#reveal'));
   if (p.inputPad) {
     if (enter) return pressClick(q('#padok'));

@@ -252,7 +252,7 @@ function summary() {
   for (const d of Object.values(data.days)) for (const p of Object.values(d.practice)) total += p.n + p.testN;
   // どのモード・両手/片手でも、一度正解したケースを数える
   const cm = {};
-  for (const key of ['cmll', 'cmllAuf', 'cmllOh', 'cmllAufOh']) {
+  for (const key of ['cmll', 'cmllAuf', 'cmllOh', 'cmllAufOh', 'cmllSolve', 'cmllSolveAuf', 'cmllSolveOh', 'cmllSolveAufOh']) {
     for (const [k, v] of Object.entries(data.caseStats[key] || {})) if (v.correct > 0 || !cm[k]) cm[k] = v;
   }
   return {
