@@ -911,7 +911,9 @@ function settle(ok, rect, wrongMsg) {
   } else if (p.eoAnswers) {
     // CMLL後のEO: 「回答する」ボタンをそのまま目立つ「次へ」ボタンに変える(同じ位置・同じ大きさ)
     const sub = app.querySelector('#eosubmit');
-    sub.disabled = false;
+    // 不正解のときは見直せるよう、2 秒間は次へを押せない(ユーザー指定)
+    sub.disabled = !ok;
+    if (!ok) setTimeout(() => { if (quiz && quiz.current === p) sub.disabled = false; }, 2000);
     sub.textContent = '次へ ▶';
     sub.classList.add('next-hot');
     sub.onclick = nextProblem;
