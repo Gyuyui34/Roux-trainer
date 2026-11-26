@@ -1,6 +1,6 @@
 import * as S from './store.js';
 import * as FX from './fx.js';
-import { generate, DRILLS, CMLL_CASES, cmllDone, identifyCmll, solvesCase, solvesSquare, mergeMoves, qtmLen, DR_POSITIONS, DR_ORIS, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext, sbSearch, sbPlaceSpots, slotOf, SEARCH_PIECES } from './drills.js';
+import { generate, DRILLS, CMLL_CASES, cmllDone, identifyCmll, solvesCase, solvesSquare, mergeMoves, qtmLen, DR_POSITIONS, DR_ORIS, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext, sbSearch, sbPlaceSpots, slotOf, SEARCH_PIECES, LSE_POS, eoAction, eoApply, eoActionKey } from './drills.js';
 import { CMLL_SETS } from './cmll.js';
 import { CubeView, ORIENTATIONS, COLOR_JA, COLOR_HEX, schemeFor } from './view3d.js';
 import { applyAlg, solved, parseAlg } from './cube.js';
@@ -1914,11 +1914,17 @@ function caseDiagram(c) {
   return `<svg width="62" height="62" viewBox="0 0 ${size} ${size}">${out}</svg>`;
 }
 
+let algPage = 'list'; // 'list' = 手順表, 'eo' = EO遷移
+const algPageSeg = () => `<div class="seg" id="apage">${[['list', '手順表'], ['eo', 'EO遷移']].map(([k, v]) => `<button data-p="${k}" class="${algPage === k ? 'on' : ''}">${v}</button>`).join('')}</div>`;
+const bindAlgPage = () => { app.querySelector('#apage').onclick = (e) => { const b = e.target.closest('[data-p]'); if (b && b.dataset.p !== algPage) { algPage = b.dataset.p; renderAlgs(); } }; };
+
 function renderAlgs() {
+  if (algPage === 'eo') { renderEoTable(); return; }
   const slot = S.get().settings.algSlot;
   const cases = CMLL_CASES.filter((c) => algSetFilter === 'all' || c.set === algSetFilter);
   const customN = CMLL_CASES.filter((c) => S.customAlg(c.name, algView)).length;
   app.innerHTML = `<h1>CMLL 手順表</h1>
+    ${algPageSeg()}
     <div class="card">
       <div class="row between"><span>出題に使う手順</span>
         <div class="chips" id="slot">${Object.entries(SLOT_NAMES).map(([k, v]) => `<button class="chip ${slot === k ? 'on' : ''}" data-slot="${k}">${v}</button>`).join('')}</div></div>
@@ -1940,7 +1946,125 @@ function renderAlgs() {
   app.querySelector('#aview').onclick = (e) => { const b = e.target.closest('[data-v]'); if (b) { algView = b.dataset.v; renderAlgs(); } };
   app.querySelector('#afilter').onchange = (e) => { algSetFilter = e.target.value; renderAlgs(); };
   app.querySelector('#bulk').onclick = openBulkPaste;
+  bindAlgPage();
   app.querySelectorAll('.algrow').forEach((b) => { b.onclick = () => openAlgEditor(CMLL_CASES.find((c) => c.name === b.dataset.case)); });
+}
+
+// ---------------- EO遷移(CMLL 手順ごとに、回す前の EO → 回した後の EO) ----------------
+// 図は「CMLL後のEO」の入力と同じ向き: 上から見た U 面(上=後ろ UB)、D 面のエッジは右に 後ろ(DB)→前(DF)
+const EO_AUFS = ['', 'U', 'U2', "U'"];
+const EO_GROUPS = [['same', '遷移が同じ'], ['auf', 'AUFを変えれば同じ'], ['flip', '反転するエッジが同じ']];
+const eoUi = { slot: null, auf: '', view: 'case', group: 'same', open: false };
+const PI = Object.fromEntries(LSE_POS.map((p, k) => [p, k]));
+const eoActOf = (c, slot, auf) => eoAction(`${auf} ${algFor(c, slot)}`);
+// 作用で動く・反転するエッジ(LSE_POS の番号)
+const eoMoved = (a) => LSE_POS.map((_, k) => k).filter((k) => a.src[k] !== k || a.flip[k]);
+const usesD = (ks) => ks.includes(PI.DF) || ks.includes(PI.DB);
+// 小さな十字の図。v[k] = 1(✕) / 0(○) / null(関係なし)
+function eoMini(v, withD) {
+  const c = (pos) => { const x = v[PI[pos]]; return `<i class="${x == null ? 'na' : x ? 'x' : 'o'}">${x == null ? '・' : x ? '✕' : '○'}</i>`; };
+  return `<span class="eomini${withD ? ' d' : ''}"><i class="e"></i>${c('UB')}<i class="e"></i>${withD ? c('DB') : ''}${c('UL')}<i class="e c">U</i>${c('UR')}${withD ? '<i class="e c">D</i>' : ''}<i class="e"></i>${c('UF')}<i class="e"></i>${withD ? c('DF') : ''}</span>`;
+}
+// 動くエッジの○✕の全パターン → 回した後(6 本すべて関係するときは、✕の数が偶数のものだけ)
+function eoTransitions(a) {
+  const ks = eoMoved(a);
+  const rows = [];
+  for (let m = 0; m < 1 << ks.length; m++) {
+    const bad = LSE_POS.map(() => 0);
+    ks.forEach((k, i) => { bad[k] = (m >> i) & 1; });
+    const n = bad.reduce((x, y) => x + y, 0);
+    if (ks.length === 6 && n % 2) continue;
+    const after = eoApply(a, bad);
+    const show = (arr) => LSE_POS.map((_, k) => (ks.includes(k) ? arr[k] : null));
+    rows.push({ n, before: show(bad), after: show(after), key: ks.map((k) => bad[k]).join('') });
+  }
+  return rows.sort((x, y) => x.n - y.n || (x.key < y.key ? -1 : 1));
+}
+function eoRule(a) {
+  const ks = eoMoved(a);
+  if (!ks.length) return '<span class="sub">エッジの向きは変わりません(エッジも動きません)</span>';
+  const fl = ks.filter((k) => a.flip[k]).map((k) => LSE_POS[k]);
+  const mv = ks.map((k) => `<span class="nowrap">${LSE_POS[a.src[k]]}→${LSE_POS[k]}${a.flip[k] ? '<b class="ng">反転</b>' : ''}</span>`).join(' ');
+  return `<div class="eorule"><div><span class="sub">全部○なら✕になる:</span> <b>${fl.length ? fl.join(' ') : 'なし'}</b></div><div class="mono">${mv}</div></div>`;
+}
+function eoTable(a) {
+  const ks = eoMoved(a);
+  if (!ks.length) return '';
+  const d = usesD(ks);
+  const rows = eoTransitions(a);
+  return `<details class="eotbl"${eoUi.open ? ' open' : ''}><summary>遷移表(${rows.length}通り)</summary>
+    <div class="eopairs${d ? ' d' : ''}">${rows.map((r) => `<div class="eop">${eoMini(r.before, d)}<span class="arr">→</span>${eoMini(r.after, d)}</div>`).join('')}</div></details>`;
+}
+const eoCaseHead = (c, slot, extra = '') => `<div class="row" style="gap:10px">${caseDiagram(c)}<div style="min-width:0"><b>${c.set}</b>${extra}<div class="mono algtext">${esc(algFor(c, slot))}</div></div></div>`;
+
+function renderEoTable() {
+  eoUi.slot ||= S.get().settings.algSlot;
+  const slot = eoUi.slot;
+  const cases = CMLL_CASES.filter((c) => algSetFilter === 'all' || c.set === algSetFilter);
+  const chips = (id, list, cur, attr) => `<div class="chips" id="${id}">${list.map(([k, v]) => `<button class="chip ${cur === k ? 'on' : ''}" data-${attr}="${k}">${v}</button>`).join('')}</div>`;
+  const aufChips = chips('eoauf', EO_AUFS.map((a) => [a, a || 'なし']), eoUi.auf, 'a');
+  let body = '';
+  if (eoUi.view === 'case') {
+    body = cases.map((c) => {
+      const a = eoActOf(c, slot, eoUi.auf);
+      return `<div class="card">${eoCaseHead(c, slot)}${a ? eoRule(a) + eoTable(a) : '<div class="sub">この手順は読み取れませんでした</div>'}</div>`;
+    }).join('');
+  } else {
+    const groups = new Map();
+    for (const c of cases) {
+      let key, a, auf = eoUi.auf;
+      if (eoUi.group === 'auf') {
+        // 先に回す AUF を 4 通り試し、表が辞書順で最小になるものを代表にする
+        let best = null;
+        for (const x of EO_AUFS) { const b = eoActOf(c, slot, x); if (b && (!best || eoActionKey(b) < best.k)) best = { k: eoActionKey(b), a: b, auf: x }; }
+        if (!best) continue;
+        ({ k: key, a, auf } = best);
+      } else {
+        a = eoActOf(c, slot, eoUi.auf);
+        if (!a) continue;
+        key = eoUi.group === 'flip' ? a.flip.join('') : eoActionKey(a);
+      }
+      if (!groups.has(key)) groups.set(key, { a, members: [] });
+      groups.get(key).members.push({ c, a, auf });
+    }
+    const list = [...groups.values()].sort((x, y) => y.members.length - x.members.length);
+    const multi = list.filter((g) => g.members.length > 1);
+    const single = list.filter((g) => g.members.length === 1);
+    const groupCard = (g, i) => {
+      const fl = LSE_POS.filter((_, k) => g.a.flip[k]);
+      const head = eoUi.group === 'flip'
+        ? `<div class="row between"><b>グループ ${i + 1}</b><span class="sub">${g.members.length}ケース</span></div><div style="margin:4px 0 8px"><span class="sub">全部○なら✕になる:</span> <b>${fl.length ? fl.join(' ') : 'なし(向きは変わらない)'}</b></div>`
+        : `<div class="row between"><b>グループ ${i + 1}</b><span class="sub">${g.members.length}ケース</span></div>${eoRule(g.a)}`;
+      const members = g.members.map((m) => `<div class="eomem">${eoCaseHead(m.c, slot, eoUi.group === 'auf' ? ` <span class="sub">・ 先に ${m.auf || 'AUFなし'}</span>` : '')}${eoUi.group === 'flip' ? eoRule(m.a) : ''}</div>`).join('');
+      return `<div class="card">${head}${members}${eoUi.group === 'flip' ? '' : eoTable(g.a)}</div>`;
+    };
+    body = `<div class="sub" style="margin-bottom:8px">${list.length}グループ(2ケース以上: ${multi.length}、単独: ${single.length})</div>
+      ${multi.map(groupCard).join('')}
+      ${single.length ? `<details class="card"><summary>ほかと同じにならないケース(${single.length})</summary>${single.map((g, i) => groupCard(g, multi.length + i)).join('')}</details>` : ''}`;
+  }
+  app.innerHTML = `<h1>CMLL 手順表</h1>
+    ${algPageSeg()}
+    <div class="card">
+      <div class="sub" style="margin-bottom:8px">CMLL の手順を回すと、LSE の6本のエッジ(UB UL UR UF DF DB)の向きがどう変わるかの一覧です。○=向きが揃っている、✕=揃っていない、・=その手順では動かないエッジ。図は上から見たU面(上が後ろ)で、DF・DB が動く手順だけ右に D 面のエッジ(上が DB)を出します。</div>
+      <div class="row between"><span>手順</span>${chips('eoslot', Object.entries(SLOT_NAMES), slot, 's')}</div>
+      <div class="row between" style="margin-top:8px"><span>表示</span>${chips('eoview', [['case', 'ケースごと'], ['group', 'グループ']], eoUi.view, 'v')}</div>
+      ${eoUi.view === 'group' ? `<div style="margin-top:8px"><div class="sub" style="margin-bottom:4px">まとめ方</div>${chips('eogroup', EO_GROUPS, eoUi.group, 'g')}</div>` : ''}
+      ${eoUi.view === 'group' && eoUi.group === 'auf' ? '' : `<div class="row between" style="margin-top:8px"><span>手順の前のAUF</span>${aufChips}</div>`}
+    </div>
+    <div class="row between" style="margin-bottom:10px">
+      <select id="afilter">${['all', ...CMLL_SETS].map((x) => `<option value="${x}" ${algSetFilter === x ? 'selected' : ''}>${x === 'all' ? '全セット' : x}</option>`).join('')}</select>
+      ${eoUi.view === 'group' && eoUi.group === 'flip' ? '' : `<button class="chip" id="eoopen">${eoUi.open ? '遷移表をすべて閉じる' : '遷移表をすべて開く'}</button>`}
+    </div>
+    ${body}`;
+  bindAlgPage();
+  const on = (id, attr, fn) => { const el = app.querySelector(`#${id}`); if (el) el.onclick = (e) => { const b = e.target.closest(`[data-${attr}]`); if (b) { fn(b.dataset[attr]); renderAlgs(); } }; };
+  on('eoslot', 's', (v) => { eoUi.slot = v; });
+  on('eoview', 'v', (v) => { eoUi.view = v; });
+  on('eogroup', 'g', (v) => { eoUi.group = v; });
+  on('eoauf', 'a', (v) => { eoUi.auf = v; });
+  app.querySelector('#afilter').onchange = (e) => { algSetFilter = e.target.value; renderAlgs(); };
+  const op = app.querySelector('#eoopen');
+  if (op) op.onclick = () => { eoUi.open = !eoUi.open; app.querySelectorAll('details.eotbl').forEach((d) => { d.open = eoUi.open; }); op.textContent = eoUi.open ? '遷移表をすべて閉じる' : '遷移表をすべて開く'; };
 }
 
 // 確認や編集のシートは演出のポップアップとは別の場所に出す(同じ場所だと、出ているポップアップを消してしまい、その後のポップアップが出なくなる)

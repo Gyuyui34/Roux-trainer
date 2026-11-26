@@ -363,6 +363,33 @@ export function badEdges(colors) {
   });
 }
 
+// CMLL 手順が LSE エッジの向きに与える作用。src[k] = 回した後に LSE_POS[k] にあるエッジの元の位置(LSE_POS の番号)、
+// flip[k] = そのエッジの「揃っている/いない」が反転するか(回した後の判定は badEdges と同じ、M 列ずれのルール込み)。
+// 回した後の向き bad'[k] = bad[src[k]] xor flip[k]。最後の持ち替えは F2B が元の場所に来るように戻す
+const LSE_REF = LSE_POS.map((p) => C.stickerAt(p));
+const LSE_OTHER = LSE_POS.map((p) => C.piecesStickers([p]).find((i) => i !== C.stickerAt(p)));
+export function eoAction(alg) {
+  const moves = typeof alg === 'string' ? parse(alg) : alg;
+  let ids = C.applyAlg([...Array(54).keys()], moves);
+  const q = f2bRotation(ids.map((i) => C.STICKERS[i].face));
+  if (!q) return null;
+  if (q.length) ids = C.applyAlg(ids, q);
+  const odd = ids[4] !== 4 && ids[4] !== 31;
+  const src = [], flip = [];
+  for (let k = 0; k < LSE_POS.length; k++) {
+    const st = ids[LSE_REF[k]];
+    let j = LSE_REF.indexOf(st), f = 0;
+    if (j < 0) { j = LSE_OTHER.indexOf(st); f = 1; }
+    if (j < 0) return null;
+    if (odd && M_SLICE.has(LSE_POS[k])) f ^= 1;
+    src.push(j); flip.push(f);
+  }
+  return { src, flip, odd };
+}
+// 作用を入力の向き(LSE_POS 順の 0/1 配列)にかける
+export const eoApply = (a, bad) => a.src.map((j, k) => bad[j] ^ a.flip[k]);
+export const eoActionKey = (a) => `${a.src.join('')}/${a.flip.join('')}`;
+
 // AUF 固定: 手順をそのまま回す。AUF ランダム: 正解の AUF(対称なケースでは複数)ごとに回した後の EO を求める
 function genCmllEo(opts) {
   const p = genCmll(opts);

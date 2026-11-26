@@ -1,6 +1,6 @@
 // node tests/verify.mjs : 手順表と出題生成の検証
 import * as C from '../js/cube.js';
-import { CMLL_CASES, cmllDone, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext, sbSearch, sbPlaceSpots, SEARCH_PIECES } from '../js/drills.js';
+import { CMLL_CASES, cmllDone, generate, _internal, badEdges, SQUARES, solvesSquare, mergeMoves, DR_POSITIONS, qtmLen, CORNER_POSITIONS, CO_ORIS, sbPieceCount, sbCatalog, sbCaseProblem, sbHintNext, sbSearch, sbPlaceSpots, SEARCH_PIECES, eoAction, eoApply, LSE_POS } from '../js/drills.js';
 
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('NG:', msg); } };
@@ -371,5 +371,20 @@ for (let i = 0; i < 100; i++) {
 }
 console.log('cmllSolve ok');
 console.log('cmllEo bad-edge counts', JSON.stringify(dist));
+
+// EO遷移: 手順の作用(エッジの移動+反転)が、実際に回した後の badEdges と一致する
+for (let i = 0; i < 400; i++) {
+  const p = generate(i % 2 ? 'cmllEoAuf' : 'cmllEo', {});
+  const before = badEdges(p.colors);
+  const vec = LSE_POS.map((x) => (before.includes(x) ? 1 : 0));
+  for (const e of p.eoAnswers) {
+    const a = eoAction(`${e.auf} ${p.alg}`);
+    const got = LSE_POS.filter((_, k) => eoApply(a, vec)[k]);
+    check(got.join() === e.bad.join(), `eoAction ${e.auf} ${p.alg}: ${got} vs ${e.bad}`);
+  }
+}
+// 持ち替え・M 列ずれの入った手順も読める
+check(eoAction("R U R' U R U2 R' y") && eoAction("r U R' U R U2 r'") && eoAction("M' R U R' U R U2 R'"), 'eoAction rotation/M');
+console.log('eoAction ok');
 console.log(fail ? `${fail} failures` : 'all passed');
 process.exit(fail ? 1 : 0);

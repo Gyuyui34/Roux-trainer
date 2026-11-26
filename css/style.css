@@ -429,3 +429,28 @@ body.quiz-mode .prompt { margin: 2px 0 8px; }
 @media (min-width: 1300px) and (min-height: 560px) {
   .lgrid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
+
+/* EO遷移(手順表) */
+.eorule { margin-top: 8px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
+.eorule .mono { font-size: 12px; line-height: 1.6; display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.eorule b.ng { color: var(--ng); font-weight: 700; margin-left: 2px; font-size: 11px; }
+.nowrap { white-space: nowrap; }
+.eotbl { margin-top: 8px; }
+.eotbl summary { cursor: pointer; color: var(--accent); font-size: 13px; padding: 4px 0; }
+.eopairs { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 6px; }
+.eop { display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--panel2); border-radius: 10px; padding: 6px 4px; }
+.eop .arr { color: var(--sub); font-size: 14px; }
+.eomini { display: inline-grid; grid-template-columns: repeat(3, 17px); grid-template-rows: repeat(3, 17px); gap: 2px; }
+.eomini.d { grid-template-columns: repeat(4, 13px); grid-template-rows: repeat(3, 13px); }
+.eomini.d i { font-size: 10px; }
+.eopairs.d { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.eopairs.d .eop { gap: 4px; padding: 6px 2px; }
+.eomini i { display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 12px; font-weight: 700; border-radius: 4px; line-height: 1; }
+.eomini i.o { background: rgba(46,204,113,.2); color: var(--ok); }
+.eomini i.x { background: rgba(255,77,94,.25); color: var(--ng); }
+.eomini i.na { color: #5b6272; background: #262a33; }
+.eomini i.e { background: transparent; }
+.eomini i.c { color: var(--sub); font-size: 9px; font-weight: 400; background: #23262e; }
+.eomini.d i:nth-child(4n) { margin-left: 3px; }
+.eomem { padding: 8px 0; border-top: 1px solid var(--line); }
+.eomem:first-of-type { border-top: 0; }
